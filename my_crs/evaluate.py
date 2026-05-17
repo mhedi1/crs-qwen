@@ -176,6 +176,7 @@ def evaluate(args):
         "dataset": args.dataset,
         "max_samples": args.max_samples,
         "recommendation_only": args.recommendation_only,
+        "skip_reranker": args.skip_reranker,
     })
 
     k_values = _cfg["evaluation"]["k_values"]
@@ -202,7 +203,12 @@ def evaluate(args):
             print(f"INSPIRED dataset not found at {data_path}.\nPlease download it first.")
             return
 
-    mode_label = "recommendation only" if args.recommendation_only else "full recommendation + response evaluation"
+    if args.skip_reranker:
+        mode_label = "KBRD-only"
+    elif args.recommendation_only:
+        mode_label = "recommendation only"
+    else:
+        mode_label = "full recommendation + response evaluation"
     print(f"\n{'='*60}")
     print(f"EVALUATION — {args.dataset.upper()} Test Set (Turn-by-Turn)")
     print(f"Format: {args.format}")
@@ -245,11 +251,15 @@ def evaluate(args):
                                 hit_values = {k: is_hit(candidates, recommended_movies, k) for k in k_values}
                                 rank = get_rank(candidates, recommended_movies)
                                 mrr = 1.0 / rank if rank > 0 else 0.0
-                                selected_movie, is_fallback = rerank(
-                                    dialogue_up_to, candidates,
-                                    era_hints=detected_decades,
-                                    serialization_format=args.format
-                                )
+                                if args.skip_reranker:
+                                    selected_movie = candidates[0]
+                                    is_fallback = False
+                                else:
+                                    selected_movie, is_fallback = rerank(
+                                        dialogue_up_to, candidates,
+                                        era_hints=detected_decades,
+                                        serialization_format=args.format
+                                    )
                                 reranker_hit = any(
                                     strict_title_match(selected_movie.get("title", ""), gt)
                                     for gt in recommended_movies
@@ -313,6 +323,7 @@ def evaluate(args):
         "dataset": args.dataset,
         "format": args.format,
         "recommendation_only": args.recommendation_only,
+        "skip_reranker": args.skip_reranker,
         "conversations": total_conversations_processed,
         "instances": total_evaluation_instances,
         "skipped_conversations": skipped_conversations,
@@ -414,6 +425,8 @@ if __name__ == "__main__":
                         help="Max conversations to process")
     parser.add_argument("--recommendation_only", action="store_true", default=False,
                         help="Skip response generation; compute only recommendation metrics")
+    parser.add_argument("--skip_reranker", action="store_true", default=False,
+                        help="Skip Qwen reranking; use KBRD top-1 candidate directly")
 
     args = parser.parse_args()
     evaluate(args)
