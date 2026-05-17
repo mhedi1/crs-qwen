@@ -406,7 +406,7 @@ def evaluate(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate CRS Pipeline")
-    parser.add_argument("--format", type=int, choices=[1, 2, 3, 4], default=3,
+    parser.add_argument("--format", type=int, choices=[1, 2, 3, 4], default=1,
                         help="Serialization format (1-4)")
     parser.add_argument("--dataset", type=str, choices=['redial', 'inspired'], default='redial',
                         help="Dataset choice (redial or inspired)")

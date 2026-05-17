@@ -109,3 +109,27 @@ All runs: `--max_samples 200 --dataset redial --recommendation_only`
 | Format 1 full — INSPIRED test set | Pending (preprocessing done 2026-05-17) |
 | KBRD-only baseline (no Qwen reranking) | Pending |
 | Format 1 with response generation (50–100 conv) | Pending |
+
+## Full Format 3 — ReDial
+
+Command:
+python my_crs/evaluate.py --max_samples 1342 --format 3 --dataset redial --recommendation_only
+
+Result file:
+experiments/eval_format3_redial_20260517_182020.json
+
+MLflow run ID:
+ff77736f7b934dff86ff90b8256a3eec
+
+Results:
+- Evaluated conversations: 1301
+- Evaluation instances: 3898
+- Recall@1: 0.0454
+- Recall@10: 0.1673
+- Recall@50: 0.3266
+- MRR: 0.0830
+- Reranker@1: 0.0918
+- Reranker fallbacks: 2
+
+Conclusion:
+Format 3 slightly improves Recall@10, but Format 1 remains better overall for the proposed reranking system because it achieves much higher Reranker@1.

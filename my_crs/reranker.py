@@ -75,7 +75,7 @@ def call_qwen(messages) -> str:
                 raise
 
 
-def rerank(history: str, candidates: list[dict], era_hints: list = None, serialization_format: int = 3) -> tuple[dict, bool]:
+def rerank(history: str, candidates: list[dict], era_hints: list = None, serialization_format: int = 1) -> tuple[dict, bool]:
     """Select the best candidate movie using Qwen as a reranker.
 
     Args:

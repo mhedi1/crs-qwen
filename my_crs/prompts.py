@@ -12,7 +12,7 @@ def truncate_history(history: str,
     return '\n'.join(truncated)
 
 
-def build_rerank_prompt(history: str, candidates: list[dict], era_hints: list = None, serialization_format: int = 3) -> str:
+def build_rerank_prompt(history: str, candidates: list[dict], era_hints: list = None, serialization_format: int = 1) -> str:
     """
     Build the prompt for Qwen reranking.
     Each candidate should have:
