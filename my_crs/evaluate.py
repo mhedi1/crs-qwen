@@ -216,6 +216,8 @@ def evaluate(args):
     print(f"Mode: {mode_label}")
     print(f"{'='*60}\n")
 
+    error_analysis_records = [] if args.save_error_analysis else None
+
     scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
     rouge_scores = defaultdict(list)
     bleu_scores = []
@@ -272,6 +274,27 @@ def evaluate(args):
                                 reranker_hits.append(reranker_hit)
                                 if is_fallback:
                                     reranker_fallbacks += 1
+
+                                if error_analysis_records is not None:
+                                    error_analysis_records.append({
+                                        "conversation_id": sample.get("conversationId", total_conversations_processed),
+                                        "turn_index": turn_index,
+                                        "dataset": args.dataset,
+                                        "format": args.format,
+                                        "skip_reranker": args.skip_reranker,
+                                        "dialogue_history": dialogue_up_to,
+                                        "ground_truth_movies": recommended_movies,
+                                        "detected_decades": detected_decades,
+                                        "kbrd_top1": candidates[0].get("title", "") if candidates else "",
+                                        "selected_movie": selected_movie.get("title", ""),
+                                        "correct": reranker_hit,
+                                        "gold_rank": rank if rank > 0 else -1,
+                                        "gold_in_top_1": hit_values.get(1, False),
+                                        "gold_in_top_10": hit_values.get(10, False),
+                                        "gold_in_top_50": hit_values.get(50, False),
+                                        "candidate_count": len(candidates),
+                                        "reranker_fallback": is_fallback,
+                                    })
 
                                 if not args.recommendation_only:
                                     response = generate_response(dialogue_up_to, selected_movie)
@@ -404,12 +427,35 @@ def evaluate(args):
             pass
         raise
 
+    # Save error analysis JSONL if requested
+    ea_path = None
+    if error_analysis_records is not None:
+        reranker_tag = "kbrd_only" if args.skip_reranker else "reranked"
+        ea_dir = os.path.join(results_dir, "error_analysis")
+        os.makedirs(ea_dir, exist_ok=True)
+        ea_filename = f"error_analysis_{args.dataset}_format{args.format}_{reranker_tag}_{timestamp}.jsonl"
+        ea_path = os.path.join(ea_dir, ea_filename)
+        fd_ea, tmp_ea = tempfile.mkstemp(dir=ea_dir, suffix=".tmp")
+        try:
+            with os.fdopen(fd_ea, "w", encoding="utf-8") as ea_f:
+                for record in error_analysis_records:
+                    ea_f.write(json.dumps(record) + "\n")
+            os.replace(tmp_ea, ea_path)
+        except Exception:
+            try:
+                os.remove(tmp_ea)
+            except OSError:
+                pass
+            raise
+
     print(f"Skip Report:")
     print(f"  Skipped conversations: {skipped_conversations}")
     print(f"  Skipped instances:     {skipped_instances}")
     print(f"  Reranker fallbacks:    {reranker_fallbacks}")
     print(f"{'='*60}")
     print(f"Results saved to experiments/eval_format{args.format}_{args.dataset}_{timestamp}.json")
+    if ea_path:
+        print(f"Error analysis saved to experiments/error_analysis/{ea_filename}")
     print(f"MLflow run ID: {mlflow_run.info.run_id}")
     print(f"{'='*60}")
     mlflow.end_run()
@@ -427,6 +473,8 @@ if __name__ == "__main__":
                         help="Skip response generation; compute only recommendation metrics")
     parser.add_argument("--skip_reranker", action="store_true", default=False,
                         help="Skip Qwen reranking; use KBRD top-1 candidate directly")
+    parser.add_argument("--save_error_analysis", action="store_true", default=False,
+                        help="Save per-instance error analysis records to experiments/error_analysis/")
 
     args = parser.parse_args()
     evaluate(args)
