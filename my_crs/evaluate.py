@@ -1,4 +1,5 @@
 import json
+import math
 import re
 import sys
 import os
@@ -11,6 +12,7 @@ from rouge_score import rouge_scorer
 from collections import defaultdict
 import mlflow
 import yaml
+import statistics
 
 _MY_CRS_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(_MY_CRS_DIR)
@@ -78,6 +80,32 @@ def get_rank(candidates: list, ground_truth: list) -> int:
             if strict_title_match(c.get("title", ""), gt_movie):
                 return rank
     return 0
+
+def get_precision_at_k(candidates: list, ground_truth: list, k: int) -> float:
+    """Precision@K: fraction of top-K candidates that match any gold movie."""
+    if k == 0:
+        return 0.0
+    top_k = candidates[:k]
+    hits = sum(
+        1 for c in top_k
+        if any(strict_title_match(c.get("title", ""), gt) for gt in ground_truth)
+    )
+    return hits / k
+
+
+def get_ndcg_at_k(candidates: list, ground_truth: list, k: int) -> float:
+    """NDCG@K with binary relevance; IDCG uses min(|gold|, K) ideal top positions."""
+    top_k = candidates[:k]
+    dcg = 0.0
+    for i, c in enumerate(top_k, start=1):
+        rel = 1.0 if any(strict_title_match(c.get("title", ""), gt) for gt in ground_truth) else 0.0
+        dcg += rel / math.log2(i + 1)
+
+    ideal_hits = min(len(ground_truth), k)
+    idcg = sum(1.0 / math.log2(i + 1) for i in range(1, ideal_hits + 1))
+
+    return dcg / idcg if idcg > 0 else 0.0
+
 
 def build_dialogue_up_to(sample: dict, turn_index: int) -> str:
     """
@@ -181,9 +209,18 @@ def evaluate(args):
 
     k_values = _cfg["evaluation"]["k_values"]
     hits = {k: [] for k in k_values}
+    precisions = {k: [] for k in k_values}
+    ndcg_values = {k: [] for k in k_values}
     mrrs = []
     reranker_hits = []
     reranker_fallbacks = 0
+
+    # per-conversation success trackers (keyed by conversation_id)
+    _conv_success1: dict[str, bool] = {}
+    _conv_recall10: dict[str, bool] = {}
+    _conv_recall50: dict[str, bool] = {}
+
+    gold_ranks_found: list[int] = []
 
     generated_responses = []
     reference_responses = []
@@ -256,6 +293,8 @@ def evaluate(args):
 
                                 # Compute all values before appending to prevent partial appends if an exception fires
                                 hit_values = {k: is_hit(candidates, recommended_movies, k) for k in k_values}
+                                prec_values = {k: get_precision_at_k(candidates, recommended_movies, k) for k in k_values}
+                                ndcg_vals = {k: get_ndcg_at_k(candidates, recommended_movies, k) for k in k_values}
                                 rank = get_rank(candidates, recommended_movies)
                                 mrr = 1.0 / rank if rank > 0 else 0.0
                                 if args.skip_reranker:
@@ -272,13 +311,36 @@ def evaluate(args):
                                     for gt in recommended_movies
                                 )
 
+                                conv_id = str(sample.get("conversationId", total_conversations_processed))
+
                                 # Append all at once — only reached if all computations above succeeded
                                 for k in k_values:
                                     hits[k].append(hit_values[k])
+                                    precisions[k].append(prec_values[k])
+                                    ndcg_values[k].append(ndcg_vals[k])
                                 mrrs.append(mrr)
                                 reranker_hits.append(reranker_hit)
                                 if is_fallback:
                                     reranker_fallbacks += 1
+
+                                if rank > 0:
+                                    gold_ranks_found.append(rank)
+
+                                # Conversation-level success flags (OR across turns)
+                                if reranker_hit:
+                                    _conv_success1[conv_id] = True
+                                elif conv_id not in _conv_success1:
+                                    _conv_success1[conv_id] = False
+
+                                if hit_values.get(10, False):
+                                    _conv_recall10[conv_id] = True
+                                elif conv_id not in _conv_recall10:
+                                    _conv_recall10[conv_id] = False
+
+                                if hit_values.get(50, False):
+                                    _conv_recall50[conv_id] = True
+                                elif conv_id not in _conv_recall50:
+                                    _conv_recall50[conv_id] = False
 
                                 if error_analysis_records is not None:
                                     error_analysis_records.append({
@@ -339,8 +401,11 @@ def evaluate(args):
                                     r1 = sum(hits[1]) / len(hits[1]) if hits[1] else 0
                                     r10 = sum(hits[10]) / len(hits[10]) if hits[10] else 0
                                     r50 = sum(hits[50]) / len(hits[50]) if hits[50] else 0
+                                    p1 = sum(precisions[1]) / len(precisions[1]) if precisions[1] else 0
+                                    nd10 = sum(ndcg_values[10]) / len(ndcg_values[10]) if ndcg_values[10] else 0
                                     print(f"[{total_evaluation_instances} instances] "
-                                          f"R@1={r1:.4f} R@10={r10:.4f} R@50={r50:.4f}")
+                                          f"R@1={r1:.4f} R@10={r10:.4f} R@50={r50:.4f} "
+                                          f"P@1={p1:.4f} NDCG@10={nd10:.4f}")
 
                             except Exception as e:
                                 print(f"[SKIP] Instance error (conv turn {turn_index}): {e}")
@@ -372,8 +437,25 @@ def evaluate(args):
     if total_evaluation_instances > 0:
         for k in k_values:
             final_metrics["recommendation"][f"Recall@{k}"] = sum(hits[k]) / len(hits[k])
+            final_metrics["recommendation"][f"Precision@{k}"] = sum(precisions[k]) / len(precisions[k])
+            final_metrics["recommendation"][f"NDCG@{k}"] = sum(ndcg_values[k]) / len(ndcg_values[k])
         final_metrics["recommendation"]["MRR"] = sum(mrrs) / len(mrrs)
         final_metrics["recommendation"]["Reranker@1"] = sum(reranker_hits) / len(reranker_hits) if reranker_hits else 0.0
+
+        final_metrics["recommendation"]["AvgGoldRank"] = (
+            sum(gold_ranks_found) / len(gold_ranks_found) if gold_ranks_found else None
+        )
+        final_metrics["recommendation"]["MedianGoldRank"] = (
+            statistics.median(gold_ranks_found) if gold_ranks_found else None
+        )
+
+        n_conv = len(_conv_success1)
+        final_metrics["conversation_level"] = {
+            "conversations_evaluated": n_conv,
+            "ConvSuccess@1": sum(_conv_success1.values()) / n_conv if n_conv else 0.0,
+            "ConvRecall@10": sum(_conv_recall10.values()) / len(_conv_recall10) if _conv_recall10 else 0.0,
+            "ConvRecall@50": sum(_conv_recall50.values()) / len(_conv_recall50) if _conv_recall50 else 0.0,
+        }
 
         if not args.recommendation_only:
             final_metrics["conversation"]["Distinct-2"] = calculate_distinct_n(generated_responses, 2)
@@ -386,13 +468,28 @@ def evaluate(args):
             final_metrics["conversation"]["Avg_Length"] = sum(response_lengths) / len(response_lengths)
 
     if total_evaluation_instances > 0:
-        mlflow.log_metrics({
-            "Recall_at_1": final_metrics["recommendation"]["Recall@1"],
-            "Recall_at_10": final_metrics["recommendation"]["Recall@10"],
-            "Recall_at_50": final_metrics["recommendation"]["Recall@50"],
-            "MRR": final_metrics["recommendation"]["MRR"],
-            "Reranker_at_1": final_metrics["recommendation"]["Reranker@1"],
-        })
+        mlflow_rec = final_metrics["recommendation"]
+        mlflow_metrics: dict = {
+            "Recall_at_1": mlflow_rec["Recall@1"],
+            "Recall_at_10": mlflow_rec["Recall@10"],
+            "Recall_at_50": mlflow_rec["Recall@50"],
+            "Precision_at_1": mlflow_rec["Precision@1"],
+            "Precision_at_10": mlflow_rec["Precision@10"],
+            "Precision_at_50": mlflow_rec["Precision@50"],
+            "NDCG_at_10": mlflow_rec["NDCG@10"],
+            "NDCG_at_50": mlflow_rec["NDCG@50"],
+            "MRR": mlflow_rec["MRR"],
+            "Reranker_at_1": mlflow_rec["Reranker@1"],
+        }
+        if mlflow_rec["AvgGoldRank"] is not None:
+            mlflow_metrics["AvgGoldRank"] = mlflow_rec["AvgGoldRank"]
+        if mlflow_rec["MedianGoldRank"] is not None:
+            mlflow_metrics["MedianGoldRank"] = float(mlflow_rec["MedianGoldRank"])
+        conv_lvl = final_metrics.get("conversation_level", {})
+        mlflow_metrics["ConvSuccess_at_1"] = conv_lvl.get("ConvSuccess@1", 0.0)
+        mlflow_metrics["ConvRecall_at_10"] = conv_lvl.get("ConvRecall@10", 0.0)
+        mlflow_metrics["ConvRecall_at_50"] = conv_lvl.get("ConvRecall@50", 0.0)
+        mlflow.log_metrics(mlflow_metrics)
     mlflow.log_metric("reranker_fallbacks", reranker_fallbacks)
     final_metrics["mlflow_run_id"] = mlflow_run.info.run_id
 
@@ -404,12 +501,29 @@ def evaluate(args):
     print(f"Total evaluation instances: {total_evaluation_instances}\n")
     
     if total_evaluation_instances > 0:
+        rec = final_metrics["recommendation"]
         print("Recommendation Metrics:")
-        print(f"  Recall@1:    {final_metrics['recommendation']['Recall@1']:.4f}")
-        print(f"  Recall@10:   {final_metrics['recommendation']['Recall@10']:.4f}")
-        print(f"  Recall@50:   {final_metrics['recommendation']['Recall@50']:.4f}")
-        print(f"  MRR:         {final_metrics['recommendation']['MRR']:.4f}")
-        print(f"  Reranker@1:  {final_metrics['recommendation']['Reranker@1']:.4f}\n")
+        print(f"  Recall@1:      {rec['Recall@1']:.4f}")
+        print(f"  Recall@10:     {rec['Recall@10']:.4f}")
+        print(f"  Recall@50:     {rec['Recall@50']:.4f}")
+        print(f"  Precision@1:   {rec['Precision@1']:.4f}")
+        print(f"  Precision@10:  {rec['Precision@10']:.4f}")
+        print(f"  Precision@50:  {rec['Precision@50']:.4f}")
+        print(f"  NDCG@10:       {rec['NDCG@10']:.4f}")
+        print(f"  NDCG@50:       {rec['NDCG@50']:.4f}")
+        print(f"  MRR:           {rec['MRR']:.4f}")
+        print(f"  Reranker@1:    {rec['Reranker@1']:.4f}")
+        avg_r = rec["AvgGoldRank"]
+        med_r = rec["MedianGoldRank"]
+        print(f"  AvgGoldRank:   {avg_r:.2f}" if avg_r is not None else "  AvgGoldRank:   N/A")
+        print(f"  MedianGoldRank:{med_r:.1f}" if med_r is not None else "  MedianGoldRank:N/A")
+
+        conv_lvl = final_metrics.get("conversation_level", {})
+        print(f"\nConversation-Level Metrics ({conv_lvl.get('conversations_evaluated', 0)} conversations):")
+        print(f"  ConvSuccess@1:  {conv_lvl.get('ConvSuccess@1', 0.0):.4f}")
+        print(f"  ConvRecall@10:  {conv_lvl.get('ConvRecall@10', 0.0):.4f}")
+        print(f"  ConvRecall@50:  {conv_lvl.get('ConvRecall@50', 0.0):.4f}")
+        print()
         
         if not args.recommendation_only:
             print("Conversation Metrics:")
