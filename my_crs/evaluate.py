@@ -247,7 +247,12 @@ def evaluate(args):
                                 # Evaluation instance
                                 dialogue_up_to = build_dialogue_up_to(sample, turn_index)
 
-                                candidates, detected_decades = get_kbrd_candidates(dialogue_up_to, top_k=_cfg["pipeline"]["top_k_candidates"])
+                                _diag = {} if error_analysis_records is not None else None
+                                candidates, detected_decades = get_kbrd_candidates(
+                                    dialogue_up_to,
+                                    top_k=_cfg["pipeline"]["top_k_candidates"],
+                                    diagnostics=_diag,
+                                )
 
                                 # Compute all values before appending to prevent partial appends if an exception fires
                                 hit_values = {k: is_hit(candidates, recommended_movies, k) for k in k_values}
@@ -294,6 +299,12 @@ def evaluate(args):
                                         "gold_in_top_50": hit_values.get(50, False),
                                         "candidate_count": len(candidates),
                                         "reranker_fallback": is_fallback,
+                                        "extracted_seeds": _diag.get("extracted_seeds", []),
+                                        "qwen_fallback_seeds": _diag.get("qwen_fallback_seeds", []),
+                                        "seed_entity_ids": _diag.get("seed_entity_ids", []),
+                                        "weak_seed_fallback": _diag.get("weak_seed_fallback", False),
+                                        "num_extracted_seeds": _diag.get("num_extracted_seeds", 0),
+                                        "num_matched_seeds": _diag.get("num_matched_seeds", 0),
                                     })
 
                                 if not args.recommendation_only:

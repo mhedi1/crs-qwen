@@ -318,7 +318,7 @@ def _enrich_candidate(candidate):
     return candidate
 
 
-def get_kbrd_candidates(dialogue: str, top_k: int = 5) -> tuple:
+def get_kbrd_candidates(dialogue: str, top_k: int = 5, diagnostics: dict = None) -> tuple:
     """Generate ranked movie candidates from the KBRD neural model.
 
     Loads model and resources on first call, extracts seed entities from the
@@ -341,11 +341,21 @@ def get_kbrd_candidates(dialogue: str, top_k: int = 5) -> tuple:
 
     if _has_error or not _data_loaded or _kbrd_agent is None:
         logger.warning("[KBRD Neural] Falling back because model or resources are unavailable.")
+        if diagnostics is not None:
+            diagnostics.update({
+                "extracted_seeds": [], "qwen_fallback_seeds": [],
+                "seed_entity_ids": [], "weak_seed_fallback": False,
+                "num_extracted_seeds": 0, "num_matched_seeds": 0,
+            })
         return get_fallback_candidates(top_k), []
 
-    seed_list, detected_decades = prepare_input(dialogue)
+    seed_list, detected_decades, detected_phrases = prepare_input(dialogue)
 
-    if len(seed_list) < 4:
+    _seeds_before_fallback = len(seed_list)
+    _weak_seed_fallback = _seeds_before_fallback < 4
+    _qwen_titles: list = []
+
+    if _weak_seed_fallback:
         logger.warning("[KBRD Adapter] Weak seeds detected, using Qwen fallback")
         try:
             prompt = (
@@ -359,6 +369,7 @@ def get_kbrd_candidates(dialogue: str, top_k: int = 5) -> tuple:
             )
             content = call_qwen(prompt)
             titles = [t.strip() for t in content.split('\n') if t.strip()]
+            _qwen_titles = titles
             logger.debug(f"[KBRD Adapter] Qwen suggested seeds: {', '.join(titles)}")
             
             added_count = 0
@@ -384,6 +395,15 @@ def get_kbrd_candidates(dialogue: str, top_k: int = 5) -> tuple:
 
     if not seed_list:
         logger.warning("[KBRD Neural] No entities detected in dialogue. Using fallback.")
+        if diagnostics is not None:
+            diagnostics.update({
+                "extracted_seeds": detected_phrases,
+                "qwen_fallback_seeds": _qwen_titles,
+                "seed_entity_ids": [],
+                "weak_seed_fallback": _weak_seed_fallback,
+                "num_extracted_seeds": _seeds_before_fallback,
+                "num_matched_seeds": 0,
+            })
         return get_fallback_candidates(top_k), detected_decades
 
     logger.info("[KBRD Neural] Running inference...")
@@ -442,6 +462,16 @@ def get_kbrd_candidates(dialogue: str, top_k: int = 5) -> tuple:
         if len(candidates) == 1:
             logger.info(f"[KBRD Neural] Top candidate: {title} (score: {score:.4f})")
 
+    if diagnostics is not None:
+        diagnostics.update({
+            "extracted_seeds": detected_phrases,
+            "qwen_fallback_seeds": _qwen_titles,
+            "seed_entity_ids": list(seed_list),
+            "weak_seed_fallback": _weak_seed_fallback,
+            "num_extracted_seeds": _seeds_before_fallback,
+            "num_matched_seeds": len(seed_list),
+        })
+
     if not candidates:
         logger.warning("[KBRD Neural] No valid candidates after filtering. Using fallback.")
         return get_fallback_candidates(top_k), detected_decades
@@ -482,7 +512,7 @@ def prepare_input(dialogue: str) -> tuple:
 
     if _has_error or not _entity2id:
         logger.warning("[KBRD Adapter WARNING] Skipping input preparation due to prior errors.")
-        return [], []
+        return [], [], []
 
     # Step A: Preprocessing
     clean_dialogue = re.sub(r"[^\w\s]", "", dialogue.lower()).strip()
@@ -677,4 +707,4 @@ def prepare_input(dialogue: str) -> tuple:
             logger.debug(f"  - {dp}")
         logger.debug(f"[KBRD Adapter] Found {len(seed_list)} DBpedia entities linked to dialogue.")
 
-    return seed_list, detected_decades
+    return seed_list, detected_decades, detected_phrases
