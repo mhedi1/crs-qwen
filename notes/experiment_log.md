@@ -133,3 +133,14 @@ Results:
 
 Conclusion:
 Format 3 slightly improves Recall@10, but Format 1 remains better overall for the proposed reranking system because it achieves much higher Reranker@1.
+
+
+## KBRD-only vs KBRD + Qwen Comparison
+
+Goal:
+Measure the contribution of the Qwen reranking stage.
+
+| System | Dataset | Conversations | Instances | Recall@1 | Recall@10 | Recall@50 | MRR | Final Selected@1 | Notes |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+| KBRD-only | ReDial | ... | ... | ... | ... | ... | ... | ... | Uses KBRD top-1 directly |
+| KBRD + Qwen Format 1 | ReDial | 1301 | 3898 | 0.0459 | 0.1662 | 0.3279 | 0.0832 | 0.1383 | Qwen reranks KBRD candidates |
