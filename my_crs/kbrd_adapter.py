@@ -346,10 +346,12 @@ def get_kbrd_candidates(dialogue: str, top_k: int = 5, diagnostics: dict = None)
                 "extracted_seeds": [], "qwen_fallback_seeds": [],
                 "seed_entity_ids": [], "weak_seed_fallback": False,
                 "num_extracted_seeds": 0, "num_matched_seeds": 0,
+                "filtered_noisy_seeds": [],
+                "num_filtered_noisy_seeds": 0,
             })
         return get_fallback_candidates(top_k), []
 
-    seed_list, detected_decades, detected_phrases = prepare_input(dialogue)
+    seed_list, detected_decades, detected_phrases, filtered_1grams = prepare_input(dialogue)
 
     _seeds_before_fallback = len(seed_list)
     _weak_seed_fallback = _seeds_before_fallback < 4
@@ -403,6 +405,8 @@ def get_kbrd_candidates(dialogue: str, top_k: int = 5, diagnostics: dict = None)
                 "weak_seed_fallback": _weak_seed_fallback,
                 "num_extracted_seeds": _seeds_before_fallback,
                 "num_matched_seeds": 0,
+                "filtered_noisy_seeds": filtered_1grams,
+                "num_filtered_noisy_seeds": len(filtered_1grams),
             })
         return get_fallback_candidates(top_k), detected_decades
 
@@ -470,6 +474,8 @@ def get_kbrd_candidates(dialogue: str, top_k: int = 5, diagnostics: dict = None)
             "weak_seed_fallback": _weak_seed_fallback,
             "num_extracted_seeds": _seeds_before_fallback,
             "num_matched_seeds": len(seed_list),
+            "filtered_noisy_seeds": filtered_1grams,
+            "num_filtered_noisy_seeds": len(filtered_1grams),
         })
 
     if not candidates:
@@ -496,6 +502,38 @@ def _get_spacy_nlp():
             subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"])
             _nlp = spacy.load("en_core_web_sm")
     return _nlp
+
+def _is_valid_one_word_seed(phrase: str, doc) -> bool:
+    """
+    Stricter filter for 1-gram movie candidates to avoid noisy matches like 'it', 'saw', 'time'.
+    """
+    from spacy.lang.en.stop_words import STOP_WORDS
+    strong_context = {"movie", "film", "called", "titled", "named"}
+    
+    is_stopword = phrase in STOP_WORDS
+    
+    for token in doc:
+        if token.text.lower() == phrase:
+            # 1. Capitalization check (not sentence initial)
+            if token.is_title and token.i > 0:
+                if not token.nbor(-1).is_punct:
+                    return True
+                
+            # 2. Strong context keywords nearby
+            prev_token = token.nbor(-1).text.lower() if token.i > 0 else ""
+            next_token = token.nbor(1).text.lower() if token.i < len(doc) - 1 else ""
+            
+            if prev_token in strong_context or next_token in strong_context:
+                return True
+                
+            # 3. Stopword / Pronoun / Verb check
+            if is_stopword or token.pos_ in ["PRON", "VERB", "AUX", "DET"]:
+                continue
+                
+            # Otherwise, it's generally safe (e.g. valid noun/name)
+            return True
+            
+    return False
 
 
 def prepare_input(dialogue: str) -> tuple:
@@ -547,6 +585,7 @@ def prepare_input(dialogue: str) -> tuple:
 
     # Step D: Matching pipeline
     unmatched_phrases = []
+    filtered_1grams = []
     
     ENTITY_BLOCKLIST = {
         "something", "anything", "nothing", "everything", "someone", "anyone",
@@ -564,6 +603,13 @@ def prepare_input(dialogue: str) -> tuple:
         if phrase in ENTITY_BLOCKLIST:
             continue
             
+        # Apply strict filtering for 1-grams
+        if len(phrase.split()) == 1:
+            if not _is_valid_one_word_seed(phrase, doc):
+                if phrase not in filtered_1grams:
+                    filtered_1grams.append(phrase)
+                continue
+                
         matched = False
         
         # Stage 1: Exact Match
@@ -706,5 +752,7 @@ def prepare_input(dialogue: str) -> tuple:
         for dp in detected_phrases:
             logger.debug(f"  - {dp}")
         logger.debug(f"[KBRD Adapter] Found {len(seed_list)} DBpedia entities linked to dialogue.")
+        if filtered_1grams:
+            logger.debug(f"[KBRD Adapter] Filtered noisy 1-grams: {filtered_1grams}")
 
-    return seed_list, detected_decades, detected_phrases
+    return seed_list, detected_decades, detected_phrases, filtered_1grams

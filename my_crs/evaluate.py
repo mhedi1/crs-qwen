@@ -305,6 +305,8 @@ def evaluate(args):
                                         "weak_seed_fallback": _diag.get("weak_seed_fallback", False),
                                         "num_extracted_seeds": _diag.get("num_extracted_seeds", 0),
                                         "num_matched_seeds": _diag.get("num_matched_seeds", 0),
+                                        "filtered_noisy_seeds": _diag.get("filtered_noisy_seeds", []),
+                                        "num_filtered_noisy_seeds": _diag.get("num_filtered_noisy_seeds", 0),
                                     })
 
                                 if not args.recommendation_only:
