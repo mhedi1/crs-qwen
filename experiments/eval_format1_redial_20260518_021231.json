@@ -1,0 +1,20 @@
+{
+    "dataset": "redial",
+    "format": 1,
+    "recommendation_only": true,
+    "skip_reranker": false,
+    "conversations": 1301,
+    "instances": 3898,
+    "skipped_conversations": 0,
+    "skipped_instances": 0,
+    "reranker_fallbacks": 0,
+    "recommendation": {
+        "Recall@1": 0.04515135967162647,
+        "Recall@10": 0.16649563878912263,
+        "Recall@50": 0.3263211903540277,
+        "MRR": 0.08282702657521525,
+        "Reranker@1": 0.14238070805541303
+    },
+    "conversation": {},
+    "mlflow_run_id": "7646fda4c753499baa3849031440dac8"
+}
