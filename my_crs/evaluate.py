@@ -109,7 +109,8 @@ def get_ndcg_at_k(candidates: list, ground_truth: list, k: int) -> float:
 
 def build_dialogue_up_to(sample: dict, turn_index: int) -> str:
     """
-    Builds dialogue text using only messages up to and including the given turn index.
+    Builds dialogue text using only messages up to and INCLUDING the given turn index.
+    Pass turn_index - 1 to exclude the current (recommendation) turn from the context.
     Replaces @movie_id with movie name.
     Cleans HTML entities.
     """
@@ -282,7 +283,7 @@ def evaluate(args):
                         if recommended_movies:
                             try:
                                 # Evaluation instance
-                                dialogue_up_to = build_dialogue_up_to(sample, turn_index)
+                                dialogue_up_to = build_dialogue_up_to(sample, turn_index - 1)
 
                                 _diag = {} if error_analysis_records is not None else None
                                 candidates, detected_decades = get_kbrd_candidates(
@@ -369,6 +370,22 @@ def evaluate(args):
                                         "num_matched_seeds": _diag.get("num_matched_seeds", 0),
                                         "filtered_noisy_seeds": _diag.get("filtered_noisy_seeds", []),
                                         "num_filtered_noisy_seeds": _diag.get("num_filtered_noisy_seeds", 0),
+                                        "num_fused_seed_candidates": _diag.get("num_fused_seed_candidates", 0),
+                                        "num_fused_qwen_candidates": _diag.get("num_fused_qwen_candidates", 0),
+                                        "fused_candidate_titles": _diag.get("fused_candidate_titles", []),
+                                        "candidate_sources": _diag.get("candidate_sources", {}),
+                                        "selected_candidate_source": selected_movie.get("source", "UNKNOWN"),
+                                        "gold_candidate_source": next(
+                                            (
+                                                c.get("source", "UNKNOWN")
+                                                for c in candidates
+                                                if any(
+                                                    strict_title_match(c.get("title", ""), gt)
+                                                    for gt in recommended_movies
+                                                )
+                                            ),
+                                            "NOT_IN_LIST",
+                                        ),
                                     })
 
                                 if not args.recommendation_only:

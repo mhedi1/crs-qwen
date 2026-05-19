@@ -318,15 +318,100 @@ def _enrich_candidate(candidate):
     return candidate
 
 
+# Maximum number of fused candidates that can be injected after KBRD top-30.
+_MAX_FUSED_CANDIDATES = 15
+
+
+def _seed_id_to_movie_candidate(seed_id: int, source_label: str) -> dict:
+    """Convert a single entity/seed ID to a movie candidate dict, or return None.
+
+    Verifies that the seed_id belongs to the KBRD movie candidate space
+    (_movie_ids), then builds the candidate dict using the same helpers
+    used for normal KBRD neural candidates.
+
+    Args:
+        seed_id: The DBpedia entity integer ID.
+        source_label: One of 'SEED_FUSION' or 'QWEN_FUSION'.
+
+    Returns:
+        A candidate dict on success, or None if the seed does not correspond
+        to a valid movie candidate.
+    """
+    # Gate 1: must be in KBRD movie candidate space (not genre/person/generic).
+    if _movie_ids is None or seed_id not in _movie_ids:
+        return None
+
+    entity_uri = _id2entity.get(seed_id)
+    if not entity_uri:
+        return None
+
+    title = _clean_title(entity_uri)
+    # Gate 2: title must be non-trivial and pass the validity filter.
+    if not title or title.strip().isdigit() or len(title.strip()) < 2:
+        return None
+    if not _is_valid_movie_title(title):
+        return None
+
+    year = _extract_year(entity_uri)
+    uri_string = entity_uri  # already the full URI string
+    c = {
+        "id": int(seed_id),
+        "title": title,
+        "genre": _infer_genre(entity_uri, title),
+        "decade": _year_to_decade(year),
+        "source": source_label,
+        "uri": uri_string,
+        "year": extract_year_from_uri(uri_string),
+    }
+    c = _enrich_candidate(c)
+    return c
+
+
+def _qwen_title_to_movie_candidate(title: str) -> dict:
+    """Resolve a Qwen-suggested title string to a verified movie candidate dict.
+
+    Performs exact lookup then fuzzy matching against _movie_title_to_id,
+    then verifies the resolved ID is in _movie_ids before building the dict.
+
+    Args:
+        title: A raw movie title string as returned by Qwen.
+
+    Returns:
+        A candidate dict on success, or None if no valid movie can be resolved.
+    """
+    clean_t = re.sub(r"[^\w\s]", "", title.lower()).strip()
+
+    # Exact lookup first.
+    mid = _movie_title_to_id.get(clean_t)
+    if mid is None:
+        # Fuzzy fallback with a high cutoff to avoid false positives.
+        matches = difflib.get_close_matches(
+            clean_t, _movie_title_to_id.keys(), n=1, cutoff=0.85
+        )
+        if matches:
+            mid = _movie_title_to_id[matches[0]]
+
+    if mid is None:
+        return None
+
+    return _seed_id_to_movie_candidate(mid, source_label="QWEN_FUSION")
+
+
 def get_kbrd_candidates(dialogue: str, top_k: int = 5, diagnostics: dict = None) -> tuple:
-    """Generate ranked movie candidates from the KBRD neural model.
+    """Generate ranked movie candidates from the KBRD neural model with Candidate Fusion.
 
     Loads model and resources on first call, extracts seed entities from the
-    dialogue, runs KBRD inference, and returns enriched candidate dicts.
+    dialogue, runs KBRD inference, then performs conservative Candidate Fusion:
+    - KBRD top-30 are kept exactly as-is.
+    - Verified movie-only seeds and resolved Qwen titles are injected after rank 30.
+    - Remaining KBRD candidates fill slots up to top_k (max 50).
+    - Fusion is capped at _MAX_FUSED_CANDIDATES to prevent domination.
+    - No ground-truth or future-turn data is used.
 
     Args:
         dialogue: Full conversation history as a formatted string.
         top_k: Maximum number of candidates to return.
+        diagnostics: Optional dict to populate with per-call diagnostic data.
 
     Returns:
         Tuple of (candidates, detected_decades). candidates is a list of dicts;
@@ -348,6 +433,10 @@ def get_kbrd_candidates(dialogue: str, top_k: int = 5, diagnostics: dict = None)
                 "num_extracted_seeds": 0, "num_matched_seeds": 0,
                 "filtered_noisy_seeds": [],
                 "num_filtered_noisy_seeds": 0,
+                "num_fused_seed_candidates": 0,
+                "num_fused_qwen_candidates": 0,
+                "fused_candidate_titles": [],
+                "candidate_sources": {},
             })
         return get_fallback_candidates(top_k), []
 
@@ -407,6 +496,10 @@ def get_kbrd_candidates(dialogue: str, top_k: int = 5, diagnostics: dict = None)
                 "num_matched_seeds": 0,
                 "filtered_noisy_seeds": filtered_1grams,
                 "num_filtered_noisy_seeds": len(filtered_1grams),
+                "num_fused_seed_candidates": 0,
+                "num_fused_qwen_candidates": 0,
+                "fused_candidate_titles": [],
+                "candidate_sources": {},
             })
         return get_fallback_candidates(top_k), detected_decades
 
@@ -427,29 +520,30 @@ def get_kbrd_candidates(dialogue: str, top_k: int = 5, diagnostics: dict = None)
     movie_ids = _kbrd_agent.movie_ids
     movie_scores = scores[torch.LongTensor(movie_ids)]
     
-    # Over-sample to ensure we get enough valid movies
-    fetch_k = min(top_k * 3, len(movie_ids))
+    # Over-sample generously to have a buffer for both KBRD top-30 and tail slots.
+    # top_k * 4 ensures enough raw indices even after title-validity filtering.
+    fetch_k = min(top_k * 4, len(movie_ids))
     topk_scores, topk_indices = torch.topk(movie_scores, k=fetch_k)
 
-    candidates = []
+    # --- Collect all valid KBRD candidates (up to top_k) in ranked order ---
+    kbrd_candidates: list = []
     for score, idx in zip(topk_scores.tolist(), topk_indices.tolist()):
-        if len(candidates) >= top_k:
+        if len(kbrd_candidates) >= top_k:
             break
-            
+
         movie_id = movie_ids[idx]
         entity_uri = _id2entity.get(movie_id)
         if not entity_uri:
             continue
-            
+
         title = _clean_title(entity_uri)
         if not title or title.strip().isdigit() or len(title.strip()) < 2:
             continue
-            
+
         if not _is_valid_movie_title(title):
             continue
-            
+
         year = _extract_year(entity_uri)
-        
         uri_string = _id2entity.get(movie_id, '')
         c = {
             "id": int(movie_id),
@@ -458,14 +552,132 @@ def get_kbrd_candidates(dialogue: str, top_k: int = 5, diagnostics: dict = None)
             "decade": _year_to_decade(year),
             "source": "KBRD_NEURAL",
             "uri": uri_string,
-            "year": extract_year_from_uri(uri_string)
+            "year": extract_year_from_uri(uri_string),
         }
         c = _enrich_candidate(c)
-        candidates.append(c)
-        
-        if len(candidates) == 1:
+        kbrd_candidates.append(c)
+
+        if len(kbrd_candidates) == 1:
             logger.info(f"[KBRD Neural] Top candidate: {title} (score: {score:.4f})")
 
+    if not kbrd_candidates:
+        logger.warning("[KBRD Neural] No valid candidates after filtering. Using fallback.")
+        if diagnostics is not None:
+            diagnostics.update({
+                "extracted_seeds": detected_phrases,
+                "qwen_fallback_seeds": _qwen_titles,
+                "seed_entity_ids": list(seed_list),
+                "weak_seed_fallback": _weak_seed_fallback,
+                "num_extracted_seeds": _seeds_before_fallback,
+                "num_matched_seeds": len(seed_list),
+                "filtered_noisy_seeds": filtered_1grams,
+                "num_filtered_noisy_seeds": len(filtered_1grams),
+                "num_fused_seed_candidates": 0,
+                "num_fused_qwen_candidates": 0,
+                "fused_candidate_titles": [],
+                "candidate_sources": {},
+            })
+        return get_fallback_candidates(top_k), detected_decades
+
+    # -----------------------------------------------------------------------
+    # Candidate Fusion
+    # Strategy: KBRD top-30 (preserved) + fused candidates + KBRD tail = top_k
+    # -----------------------------------------------------------------------
+
+    # Build lookup sets from ALL kbrd_candidates (not just top-30) to allow
+    # proper deduplication across the full KBRD list before fusion.
+    seen_ids: set = {c["id"] for c in kbrd_candidates}
+    seen_norm_titles: set = {
+        re.sub(r"[^\w\s]", "", c["title"].lower()).strip()
+        for c in kbrd_candidates
+    }
+
+    fused_candidates: list = []
+    num_fused_seed = 0
+    num_fused_qwen = 0
+
+    # --- Fuse movie-only seeds (extracted from dialogue history only) ---
+    # Only accept seeds that are confirmed movie IDs (seed_id in _movie_ids).
+    # Genre IDs, person/actor IDs, and generic DBpedia entity IDs are excluded
+    # by the _seed_id_to_movie_candidate() gate: `seed_id not in _movie_ids`.
+    for seed_id in seed_list:
+        if len(fused_candidates) >= _MAX_FUSED_CANDIDATES:
+            break
+        # Skip if already in KBRD candidate list (keep original KBRD position).
+        if seed_id in seen_ids:
+            continue
+        candidate = _seed_id_to_movie_candidate(seed_id, source_label="SEED_FUSION")
+        if candidate is None:
+            continue
+        norm_t = re.sub(r"[^\w\s]", "", candidate["title"].lower()).strip()
+        if norm_t in seen_norm_titles:
+            continue  # deduplicate by normalized title as well
+        fused_candidates.append(candidate)
+        seen_ids.add(seed_id)
+        seen_norm_titles.add(norm_t)
+        num_fused_seed += 1
+        logger.info(f"[Fusion] Injecting SEED_FUSION candidate: {candidate['title']}")
+
+    # --- Fuse Qwen-suggested titles (only when weak-seed fallback triggered) ---
+    for qwen_title in _qwen_titles:
+        if len(fused_candidates) >= _MAX_FUSED_CANDIDATES:
+            break
+        candidate = _qwen_title_to_movie_candidate(qwen_title)
+        if candidate is None:
+            continue
+        if candidate["id"] in seen_ids:
+            continue  # already present in KBRD or seed fusion
+        norm_t = re.sub(r"[^\w\s]", "", candidate["title"].lower()).strip()
+        if norm_t in seen_norm_titles:
+            continue
+        fused_candidates.append(candidate)
+        seen_ids.add(candidate["id"])
+        seen_norm_titles.add(norm_t)
+        num_fused_qwen += 1
+        logger.info(f"[Fusion] Injecting QWEN_FUSION candidate: {candidate['title']}")
+
+    fused_titles = [c["title"] for c in fused_candidates]
+    logger.info(
+        f"[Fusion] Fused {num_fused_seed} seed + {num_fused_qwen} Qwen candidates"
+        f" (total fused: {len(fused_candidates)})"
+    )
+
+    # --- Assemble final list: KBRD top-30 + fused + KBRD tail ---
+    # KBRD top-30: preserved exactly, in original order.
+    kbrd_top30 = kbrd_candidates[:30]
+
+    # KBRD tail: candidates ranked 31+ that were NOT fused (by id).
+    fused_ids = {c["id"] for c in fused_candidates}
+    kbrd_tail = [
+        c for c in kbrd_candidates[30:]
+        if c["id"] not in fused_ids
+    ]
+
+    # Remaining slots after top-30 and fused block.
+    n_fused = len(fused_candidates)
+    tail_slots = max(0, top_k - len(kbrd_top30) - n_fused)
+    kbrd_tail_fill = kbrd_tail[:tail_slots]
+
+    final_candidates = kbrd_top30 + fused_candidates + kbrd_tail_fill
+
+    # Safety assertion: never exceed top_k.
+    if len(final_candidates) > top_k:
+        final_candidates = final_candidates[:top_k]
+
+    # Build candidate_sources summary dict.
+    candidate_sources: dict = {}
+    for c in final_candidates:
+        src = c.get("source", "UNKNOWN")
+        candidate_sources[src] = candidate_sources.get(src, 0) + 1
+
+    logger.info(
+        f"[Fusion] Final candidate list: {len(final_candidates)} total | "
+        + ", ".join(f"{s}={n}" for s, n in candidate_sources.items())
+    )
+
+    # -----------------------------------------------------------------------
+    # Diagnostics
+    # -----------------------------------------------------------------------
     if diagnostics is not None:
         diagnostics.update({
             "extracted_seeds": detected_phrases,
@@ -476,13 +688,14 @@ def get_kbrd_candidates(dialogue: str, top_k: int = 5, diagnostics: dict = None)
             "num_matched_seeds": len(seed_list),
             "filtered_noisy_seeds": filtered_1grams,
             "num_filtered_noisy_seeds": len(filtered_1grams),
+            # Fusion-specific diagnostics
+            "num_fused_seed_candidates": num_fused_seed,
+            "num_fused_qwen_candidates": num_fused_qwen,
+            "fused_candidate_titles": fused_titles,
+            "candidate_sources": candidate_sources,
         })
 
-    if not candidates:
-        logger.warning("[KBRD Neural] No valid candidates after filtering. Using fallback.")
-        return get_fallback_candidates(top_k), detected_decades
-
-    return candidates, detected_decades
+    return final_candidates, detected_decades
 
 
 def _get_ngrams(words: List[str], n: int) -> List[str]:
