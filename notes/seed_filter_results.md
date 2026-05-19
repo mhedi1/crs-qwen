@@ -54,3 +54,42 @@ The one-word seed quality filter improved all main recommendation metrics. The l
 This confirms that noisy one-word entity matches were hurting KBRD retrieval and downstream Qwen reranking. The improvement is thesis-defensible because it addresses a general entity-linking disambiguation problem: ambiguous one-word dialogue tokens can be incorrectly matched as movie titles. The filter does not target specific test conversations, and it preserves multi-word movie titles and the original KBRD/Qwen ranking logic.
 
 Some noisy seeds still remain, such as "war", "it", "time", "nice", and "lol", so further retrieval improvement is possible. However, the conservative filter already improves the system without changing KBRD ranking or reranker logic.
+
+## Official Extended-Metrics ReDial Run
+
+After adding extended recommendation metrics, the full ReDial evaluation was rerun using the seed-filtered system.
+
+Configuration:
+- Dataset: ReDial
+- Format: 1
+- Conversations processed: 1301
+- Evaluation instances: 3898
+- Result file: experiments/eval_format1_redial_20260519_175558.json
+- Error analysis file: experiments/error_analysis/error_analysis_redial_format1_reranked_20260519_175558.jsonl
+- MLflow run ID: 5427961d37af4d628b32dbaf62f6504c
+
+| Metric | Value |
+|---|---:|
+| Recall@1 | 0.0511 |
+| Recall@10 | 0.1893 |
+| Recall@50 | 0.3397 |
+| Precision@1 | 0.0511 |
+| Precision@10 | 0.0198 |
+| Precision@50 | 0.0074 |
+| NDCG@10 | 0.0994 |
+| NDCG@50 | 0.1331 |
+| MRR | 0.0919 |
+| Reranker@1 | 0.1503 |
+| AvgGoldRank | 13.43 |
+| MedianGoldRank | 9.0 |
+
+Conversation-level metrics:
+
+| Metric | Value |
+|---|---:|
+| ConvSuccess@1 | 0.3697 |
+| ConvRecall@10 | 0.4374 |
+| ConvRecall@50 | 0.6626 |
+
+Interpretation:
+This run is the official main ReDial result for the seed-filtered system. It confirms that the one-word seed quality filter improves candidate retrieval and downstream reranking while also providing stronger ranking-quality metrics such as NDCG and conversation-level success.
