@@ -206,6 +206,7 @@ def evaluate(args):
         "max_samples": args.max_samples,
         "recommendation_only": args.recommendation_only,
         "skip_reranker": args.skip_reranker,
+        "disable_fusion": args.disable_fusion,
     })
 
     k_values = _cfg["evaluation"]["k_values"]
@@ -290,6 +291,7 @@ def evaluate(args):
                                     dialogue_up_to,
                                     top_k=_cfg["pipeline"]["top_k_candidates"],
                                     diagnostics=_diag,
+                                    use_fusion=not args.disable_fusion,
                                 )
 
                                 # Compute all values before appending to prevent partial appends if an exception fires
@@ -442,6 +444,7 @@ def evaluate(args):
         "format": args.format,
         "recommendation_only": args.recommendation_only,
         "skip_reranker": args.skip_reranker,
+        "disable_fusion": args.disable_fusion,
         "conversations": total_conversations_processed,
         "instances": total_evaluation_instances,
         "skipped_conversations": skipped_conversations,
@@ -617,6 +620,8 @@ if __name__ == "__main__":
                         help="Skip response generation; compute only recommendation metrics")
     parser.add_argument("--skip_reranker", action="store_true", default=False,
                         help="Skip Qwen reranking; use KBRD top-1 candidate directly")
+    parser.add_argument("--disable_fusion", action="store_true", default=False,
+                        help="Disable Candidate Fusion; use pure KBRD candidates only")
     parser.add_argument("--save_error_analysis", action="store_true", default=False,
                         help="Save per-instance error analysis records to experiments/error_analysis/")
 

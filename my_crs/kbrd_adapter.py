@@ -397,11 +397,17 @@ def _qwen_title_to_movie_candidate(title: str) -> dict:
     return _seed_id_to_movie_candidate(mid, source_label="QWEN_FUSION")
 
 
-def get_kbrd_candidates(dialogue: str, top_k: int = 5, diagnostics: dict = None) -> tuple:
-    """Generate ranked movie candidates from the KBRD neural model with Candidate Fusion.
+def get_kbrd_candidates(
+    dialogue: str,
+    top_k: int = 5,
+    diagnostics: dict = None,
+    use_fusion: bool = True,
+) -> tuple:
+    """Generate ranked movie candidates from the KBRD neural model.
 
     Loads model and resources on first call, extracts seed entities from the
-    dialogue, runs KBRD inference, then performs conservative Candidate Fusion:
+    dialogue, runs KBRD inference, then optionally performs conservative
+    Candidate Fusion:
     - KBRD top-30 are kept exactly as-is.
     - Verified movie-only seeds and resolved Qwen titles are injected after rank 30.
     - Remaining KBRD candidates fill slots up to top_k (max 50).
@@ -412,6 +418,7 @@ def get_kbrd_candidates(dialogue: str, top_k: int = 5, diagnostics: dict = None)
         dialogue: Full conversation history as a formatted string.
         top_k: Maximum number of candidates to return.
         diagnostics: Optional dict to populate with per-call diagnostic data.
+        use_fusion: If False, return pure KBRD candidates without fusion injection.
 
     Returns:
         Tuple of (candidates, detected_decades). candidates is a list of dicts;
@@ -578,6 +585,33 @@ def get_kbrd_candidates(dialogue: str, top_k: int = 5, diagnostics: dict = None)
                 "candidate_sources": {},
             })
         return get_fallback_candidates(top_k), detected_decades
+
+    # -----------------------------------------------------------------------
+    # Candidate Fusion (skipped when use_fusion=False)
+    # -----------------------------------------------------------------------
+    if not use_fusion:
+        logger.info("[KBRD Neural] Fusion disabled — returning pure KBRD candidates.")
+        pure_candidates = kbrd_candidates[:top_k]
+        if diagnostics is not None:
+            candidate_sources_pure: dict = {}
+            for c in pure_candidates:
+                src = c.get("source", "UNKNOWN")
+                candidate_sources_pure[src] = candidate_sources_pure.get(src, 0) + 1
+            diagnostics.update({
+                "extracted_seeds": detected_phrases,
+                "qwen_fallback_seeds": _qwen_titles,
+                "seed_entity_ids": list(seed_list),
+                "weak_seed_fallback": _weak_seed_fallback,
+                "num_extracted_seeds": _seeds_before_fallback,
+                "num_matched_seeds": len(seed_list),
+                "filtered_noisy_seeds": filtered_1grams,
+                "num_filtered_noisy_seeds": len(filtered_1grams),
+                "num_fused_seed_candidates": 0,
+                "num_fused_qwen_candidates": 0,
+                "fused_candidate_titles": [],
+                "candidate_sources": candidate_sources_pure,
+            })
+        return pure_candidates, detected_decades
 
     # -----------------------------------------------------------------------
     # Candidate Fusion
