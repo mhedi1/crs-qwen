@@ -1,4 +1,12 @@
-\# Final No-Leak ReDial Ablation Results
+> NOTE: The results in this file (Reranker@1 = 0.0274) are from the no-leak evaluation after the evaluation protocol fix.  
+
+> The pre-fix results (Reranker@1 = 0.1503) are in the official result files.  
+
+> See experiment_log.md for full explanation.
+
+
+
+# Final No-Leak ReDial Ablation Results
 
 
 
