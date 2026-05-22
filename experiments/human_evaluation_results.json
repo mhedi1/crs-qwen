@@ -1,0 +1,158 @@
+{
+  "evaluation_type": "human_evaluation",
+  "dataset": "redial",
+  "num_responses_evaluated": 20,
+  "source_file": "experiments/response_samples/responses_redial_20260522_200213.jsonl",
+  "criteria": {
+    "fluency": "Does the response sound natural? (0-2)",
+    "informativeness": "Does it say something useful about the movie? (0-2)",
+    "consistency": "Does the response match the recommended movie? (0-2)"
+  },
+  "scores": [
+    {
+      "id": 1,
+      "movie": "Superbad",
+      "fluency": 2,
+      "informativeness": 2,
+      "consistency": 2
+    },
+    {
+      "id": 2,
+      "movie": "National Lampoons Vacation",
+      "fluency": 2,
+      "informativeness": 2,
+      "consistency": 2
+    },
+    {
+      "id": 3,
+      "movie": "Bad Moms",
+      "fluency": 2,
+      "informativeness": 1,
+      "consistency": 2
+    },
+    {
+      "id": 4,
+      "movie": "Hot Fuzz",
+      "fluency": 2,
+      "informativeness": 1,
+      "consistency": 2
+    },
+    {
+      "id": 5,
+      "movie": "Some Kind of Wonderful",
+      "fluency": 2,
+      "informativeness": 1,
+      "consistency": 2
+    },
+    {
+      "id": 6,
+      "movie": "Friday the 13th",
+      "fluency": 2,
+      "informativeness": 2,
+      "consistency": 2
+    },
+    {
+      "id": 7,
+      "movie": "Get Out",
+      "fluency": 2,
+      "informativeness": 2,
+      "consistency": 2
+    },
+    {
+      "id": 8,
+      "movie": "Scary Movie",
+      "fluency": 2,
+      "informativeness": 2,
+      "consistency": 2
+    },
+    {
+      "id": 9,
+      "movie": "Easy A",
+      "fluency": 2,
+      "informativeness": 1,
+      "consistency": 2
+    },
+    {
+      "id": 10,
+      "movie": "Trainwreck",
+      "fluency": 2,
+      "informativeness": 2,
+      "consistency": 2
+    },
+    {
+      "id": 11,
+      "movie": "Easy A",
+      "fluency": 2,
+      "informativeness": 1,
+      "consistency": 2
+    },
+    {
+      "id": 12,
+      "movie": "Jumanji 2017",
+      "fluency": 2,
+      "informativeness": 2,
+      "consistency": 2
+    },
+    {
+      "id": 13,
+      "movie": "Avengers Age of Ultron",
+      "fluency": 2,
+      "informativeness": 2,
+      "consistency": 2
+    },
+    {
+      "id": 14,
+      "movie": "Avengers Age of Ultron",
+      "fluency": 2,
+      "informativeness": 2,
+      "consistency": 2
+    },
+    {
+      "id": 15,
+      "movie": "The Conjuring",
+      "fluency": 2,
+      "informativeness": 2,
+      "consistency": 2
+    },
+    {
+      "id": 16,
+      "movie": "The Matrix",
+      "fluency": 2,
+      "informativeness": 2,
+      "consistency": 2
+    },
+    {
+      "id": 17,
+      "movie": "Avengers Age of Ultron",
+      "fluency": 2,
+      "informativeness": 1,
+      "consistency": 2
+    },
+    {
+      "id": 18,
+      "movie": "Avengers Age of Ultron",
+      "fluency": 2,
+      "informativeness": 1,
+      "consistency": 2
+    },
+    {
+      "id": 19,
+      "movie": "The Avengers",
+      "fluency": 2,
+      "informativeness": 1,
+      "consistency": 2
+    },
+    {
+      "id": 20,
+      "movie": "The Shining",
+      "fluency": 2,
+      "informativeness": 1,
+      "consistency": 2
+    }
+  ],
+  "averages": {
+    "fluency": 2.0,
+    "informativeness": 1.55,
+    "consistency": 2.0
+  }
+}
