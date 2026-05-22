@@ -226,6 +226,7 @@ def evaluate(args):
 
     generated_responses = []
     reference_responses = []
+    response_sample_records = []
     response_lengths = []
 
     total_conversations_processed = 0
@@ -401,6 +402,14 @@ def evaluate(args):
                                     ref_text = ref_text.replace("&quot;", '"').replace("&amp;", "&")
                                     reference_responses.append(ref_text)
 
+                                    response_sample_records.append({
+                                        "conversation_id": sample.get("conversationId"),
+                                        "turn_index": turn_index,
+                                        "selected_movie": selected_movie.get("title", "Unknown"),
+                                        "generated_response": response,
+                                        "reference_response": ref_text,
+                                    })
+
                                     response_lengths.append(len(nltk.word_tokenize(response)))
 
                                     ref_tokens = [nltk.word_tokenize(ref_text.lower())]
@@ -573,6 +582,16 @@ def evaluate(args):
         except OSError:
             pass
         raise
+
+    # Save response samples for qualitative thesis analysis
+    if not args.recommendation_only and response_sample_records:
+        rs_dir = os.path.join(results_dir, "response_samples")
+        os.makedirs(rs_dir, exist_ok=True)
+        rs_path = os.path.join(rs_dir, f"responses_{args.dataset}_{timestamp}.jsonl")
+        with open(rs_path, "w", encoding="utf-8") as f:
+            for record in response_sample_records:
+                f.write(json.dumps(record) + "\n")
+        print(f"Response samples saved to {rs_path}")
 
     # Save error analysis JSONL if requested
     ea_path = None
