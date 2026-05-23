@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRS Chat — Thesis Demo</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body class="chat-body">
+
+  <!-- Header -->
+  <nav class="navbar chat-navbar px-4 py-3">
+    <div class="d-flex align-items-center gap-3">
+      <a href="/" class="btn btn-sm btn-outline-secondary">&#8592; Home</a>
+      <span class="navbar-brand mb-0 text-white fw-semibold">
+        Conversational Movie Recommender
+      </span>
+    </div>
+    <button id="clearBtn" class="btn btn-sm btn-outline-danger">Clear Chat</button>
+  </nav>
+
+  <!-- Chat window -->
+  <div class="chat-container" id="chatContainer">
+    <div id="messageList">
+      <div class="system-welcome text-center text-secondary py-4 small">
+        Start the conversation — describe the kind of film you are in the mood for.
+      </div>
+    </div>
+  </div>
+
+  <!-- Input bar -->
+  <div class="input-bar">
+    <div class="input-group">
+      <input
+        type="text"
+        id="userInput"
+        class="form-control chat-input"
+        placeholder="Describe the film you want…"
+        autocomplete="off"
+      >
+      <button id="sendBtn" class="btn btn-primary px-4">Send</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const messageList = document.getElementById("messageList");
+    const chatContainer = document.getElementById("chatContainer");
+    const userInput = document.getElementById("userInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const clearBtn = document.getElementById("clearBtn");
+
+    function scrollToBottom() {
+      chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: "smooth" });
+    }
+
+    function appendUserMessage(text) {
+      const div = document.createElement("div");
+      div.className = "d-flex justify-content-end mb-3";
+      div.innerHTML = `
+        <div class="bubble bubble-user">
+          <div class="bubble-text">${escapeHtml(text)}</div>
+        </div>
+      `;
+      messageList.appendChild(div);
+      scrollToBottom();
+    }
+
+    function appendSystemMessage(data) {
+      const { response, movie, candidates, selected_candidate, turn_number } = data;
+      const panelId = "panel-" + turn_number;
+
+      // Movie card HTML
+      let movieHtml = "";
+      if (movie && movie.title && movie.title.toLowerCase() !== "unknown") {
+        const genreBadge = (movie.genre && movie.genre.toLowerCase() !== "unknown")
+          ? `<span class="genre-tag">${escapeHtml(movie.genre)}</span>` : "";
+        const decadeBadge = (movie.decade && movie.decade.toLowerCase() !== "unknown")
+          ? `<span class="decade-tag">${escapeHtml(movie.decade)}</span>` : "";
+        const metaRow = (genreBadge || decadeBadge)
+          ? `<div class="movie-meta">${genreBadge}${decadeBadge}</div>` : "";
+        movieHtml = `
+          <div class="movie-card mt-2">
+            <span class="movie-badge">&#127916; Recommended</span>
+            <div class="movie-title mt-1">${escapeHtml(movie.title)}</div>
+            ${metaRow}
+          </div>
+        `;
+      }
+
+      // Candidates table HTML
+      let candidatesHtml = "";
+      if (candidates && candidates.length > 0) {
+        const rows = candidates.map((c, idx) => {
+          const sourceClass = c.source === "KBRD_NEURAL" ? "source-kbrd" : "source-seed";
+          return `
+            <tr class="candidate-row">
+              <td class="rank-col">${idx + 1}</td>
+              <td>${escapeHtml(c.title || "—")}</td>
+              <td>${(!c.genre  || c.genre.toLowerCase()  === "unknown") ? "—" : escapeHtml(c.genre)}</td>
+              <td>${(!c.decade || c.decade.toLowerCase() === "unknown") ? "—" : escapeHtml(c.decade)}</td>
+              <td><span class="source-badge ${sourceClass}">${escapeHtml(c.source || "—")}</span></td>
+            </tr>
+          `;
+        }).join("");
+        candidatesHtml = `
+          <table class="candidate-table w-100">
+            <thead>
+              <tr>
+                <th>#</th><th>Title</th><th>Genre</th><th>Decade</th><th>Source</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        `;
+      } else {
+        candidatesHtml = `<p class="text-secondary small mb-0">Pipeline details not available.</p>`;
+      }
+
+      // Qwen Selected row
+      let qwenSelectedHtml = "";
+      if (selected_candidate && selected_candidate.title) {
+        let rankNote = "";
+        if (selected_candidate.in_top5 && selected_candidate.kbrd_rank !== null) {
+          rankNote = `(ranked <strong>#${selected_candidate.kbrd_rank}</strong> in KBRD list)` +
+                     ` <span class="in-top5-note">(in top-5)</span>`;
+        } else if (selected_candidate.in_top5) {
+          rankNote = `<span class="in-top5-note">(in top-5)</span>`;
+        } else {
+          rankNote = `<span class="not-in-top5-note">(ranked outside KBRD top-5)</span>`;
+        }
+        qwenSelectedHtml = `
+          <div class="qwen-selected-row mt-3">
+            <span class="qwen-selected-label">Qwen Selected:</span>
+            <span class="qwen-selected-title">${escapeHtml(selected_candidate.title)}</span>
+            <span class="qwen-selected-rank">${rankNote}</span>
+          </div>
+        `;
+      }
+
+      const div = document.createElement("div");
+      div.className = "d-flex justify-content-start mb-4";
+      div.innerHTML = `
+        <div class="bubble bubble-system">
+          <div class="turn-label">Turn ${turn_number}</div>
+          <div class="bubble-text md-content">${marked.parse(response || "")}</div>
+          ${movieHtml}
+          <div class="pipeline-toggle mt-2">
+            <button
+              class="btn btn-sm btn-outline-secondary pipeline-btn"
+              data-bs-toggle="collapse"
+              data-bs-target="#${panelId}"
+              aria-expanded="false"
+            >
+              Pipeline Details &#9660;
+            </button>
+            <div class="collapse mt-2" id="${panelId}">
+              <div class="pipeline-panel">
+                <div class="pipeline-header mb-2">KBRD Top-5 Candidates</div>
+                ${candidatesHtml}
+                ${qwenSelectedHtml}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      messageList.appendChild(div);
+      scrollToBottom();
+    }
+
+    function appendThinking() {
+      const div = document.createElement("div");
+      div.id = "thinking";
+      div.className = "d-flex justify-content-start mb-3";
+      div.innerHTML = `
+        <div class="bubble bubble-system thinking">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        </div>
+      `;
+      messageList.appendChild(div);
+      scrollToBottom();
+      return div;
+    }
+
+    function removeThinking() {
+      const t = document.getElementById("thinking");
+      if (t) t.remove();
+    }
+
+    function escapeHtml(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function setLoading(on) {
+      sendBtn.disabled = on;
+      userInput.disabled = on;
+      sendBtn.textContent = on ? "Thinking…" : "Send";
+    }
+
+    async function sendMessage() {
+      const text = userInput.value.trim();
+      if (!text) return;
+      userInput.value = "";
+      appendUserMessage(text);
+      const thinking = appendThinking();
+      setLoading(true);
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text })
+        });
+        const data = await res.json();
+        removeThinking();
+        appendSystemMessage(data);
+      } catch (err) {
+        removeThinking();
+        appendSystemMessage({
+          response: "A network error occurred. Please check your connection and try again.",
+          movie: null,
+          candidates: [],
+          turn_number: "?"
+        });
+      } finally {
+        setLoading(false);
+        userInput.focus();
+      }
+    }
+
+    sendBtn.addEventListener("click", sendMessage);
+    userInput.addEventListener("keydown", e => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    });
+
+    clearBtn.addEventListener("click", async () => {
+      await fetch("/api/clear", { method: "POST" });
+      messageList.innerHTML = `
+        <div class="system-welcome text-center text-secondary py-4 small">
+          Conversation cleared. Start fresh below.
+        </div>
+      `;
+    });
+  </script>
+</body>
+</html>

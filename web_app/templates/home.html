@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRS Thesis Demo</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="home-body d-flex align-items-center justify-content-center min-vh-100">
+  <div class="text-center home-card p-5">
+    <div class="mb-4">
+      <span class="badge bg-secondary px-3 py-2 mb-3 small">Thesis Demo</span>
+      <h1 class="display-5 fw-bold text-white mb-3">
+        Conversational Movie Recommender System
+      </h1>
+      <p class="lead home-subtitle mb-2">
+        Powered by KBRD retrieval + Qwen reranking + Qwen response generation
+      </p>
+      <p class="text-secondary">
+        Engage in a natural conversation to receive personalised film recommendations
+        driven by a hybrid neural knowledge-graph pipeline.
+      </p>
+    </div>
+    <div class="row justify-content-center g-3 mb-5 text-start">
+      <div class="col-md-3">
+        <div class="feature-card p-3">
+          <div class="feature-icon mb-2">&#128202;</div>
+          <div class="small text-secondary fw-semibold">Stage 1</div>
+          <div class="text-white small">KBRD neural retrieval over knowledge graph</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="feature-card p-3">
+          <div class="feature-icon mb-2">&#9935;</div>
+          <div class="small text-secondary fw-semibold">Stage 2</div>
+          <div class="text-white small">Qwen LLM reranking with seed fusion</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="feature-card p-3">
+          <div class="feature-icon mb-2">&#128172;</div>
+          <div class="small text-secondary fw-semibold">Stage 3</div>
+          <div class="text-white small">Qwen natural language response generation</div>
+        </div>
+      </div>
+    </div>
+    <a href="/chat" class="btn btn-primary btn-lg px-5 py-3 start-btn">
+      Start Conversation
+    </a>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
