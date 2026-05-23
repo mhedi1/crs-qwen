@@ -4,12 +4,53 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template, request, session, jsonify
 import traceback
+import requests
 
 app = Flask(__name__)
 app.secret_key = "crs_thesis_demo_2024"
+TMDB_API_KEY = "945e20b8c7b2e5046a046a6e2a1b910c"
+
+TMDB_GENRE_MAP = {
+    28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy",
+    80: "Crime", 99: "Documentary", 18: "Drama", 10751: "Family",
+    14: "Fantasy", 36: "History", 27: "Horror", 10402: "Music",
+    9648: "Mystery", 10749: "Romance", 878: "Science Fiction",
+    10770: "TV Movie", 53: "Thriller", 10752: "War", 37: "Western",
+}
 
 _recommender = None
 _recommender_error = None
+
+
+def enrich_with_tmdb(title):
+    try:
+        resp = requests.get(
+            "https://api.themoviedb.org/3/search/movie",
+            params={"query": title, "api_key": TMDB_API_KEY},
+            timeout=2,
+        )
+        resp.raise_for_status()
+        results = resp.json().get("results", [])
+        if not results:
+            return {}
+        hit = results[0]
+
+        genre_ids = hit.get("genre_ids", [])
+        genre = ", ".join(
+            TMDB_GENRE_MAP[gid] for gid in genre_ids if gid in TMDB_GENRE_MAP
+        )
+
+        release_date = hit.get("release_date") or ""
+        year_str = release_date[:4]
+        decade = (str((int(year_str) // 10) * 10) + "s") if year_str.isdigit() else ""
+
+        poster_path = hit.get("poster_path")
+        poster_url = f"https://image.tmdb.org/t/p/w300{poster_path}" if poster_path else None
+
+        return {"genre": genre or None, "decade": decade or None, "poster_url": poster_url}
+    except Exception as e:
+        print(f"[TMDB] Enrichment failed for '{title}': {e}")
+        return {}
 
 
 def get_recommender():
@@ -107,6 +148,19 @@ def api_chat():
         )
         movie = None
         candidates = []
+
+    # Enrich movie with TMDB poster and metadata (override only if pipeline value missing/Unknown)
+    if movie:
+        movie.setdefault("poster_url", None)
+        if movie.get("title"):
+            tmdb = enrich_with_tmdb(movie["title"])
+            cur_genre = (movie.get("genre") or "").strip()
+            cur_decade = (movie.get("decade") or "").strip()
+            if tmdb.get("genre") and (not cur_genre or cur_genre.lower() == "unknown"):
+                movie["genre"] = tmdb["genre"]
+            if tmdb.get("decade") and (not cur_decade or cur_decade.lower() == "unknown"):
+                movie["decade"] = tmdb["decade"]
+            movie["poster_url"] = tmdb.get("poster_url")
 
     history.append({"role": "system", "content": response_text})
     session["history"] = history

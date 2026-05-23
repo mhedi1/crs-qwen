@@ -186,6 +186,20 @@ body {
   font-weight: 700;
   color: var(--movie-gold);
 }
+.movie-card-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 6px;
+}
+.movie-card-info { flex: 1; min-width: 0; }
+.movie-poster {
+  max-height: 120px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  object-fit: cover;
+  display: block;
+}
 .movie-meta { margin-top: 4px; display: flex; gap: 8px; flex-wrap: wrap; }
 .genre-tag, .decade-tag {
   font-size: .75rem;

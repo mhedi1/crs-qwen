@@ -81,11 +81,19 @@
           ? `<span class="decade-tag">${escapeHtml(movie.decade)}</span>` : "";
         const metaRow = (genreBadge || decadeBadge)
           ? `<div class="movie-meta">${genreBadge}${decadeBadge}</div>` : "";
+        const posterHtml = movie.poster_url
+          ? `<img src="${escapeHtml(movie.poster_url)}" class="movie-poster" alt="Movie poster">`
+          : "";
         movieHtml = `
           <div class="movie-card mt-2">
             <span class="movie-badge">&#127916; Recommended</span>
-            <div class="movie-title mt-1">${escapeHtml(movie.title)}</div>
-            ${metaRow}
+            <div class="movie-card-body">
+              ${posterHtml}
+              <div class="movie-card-info">
+                <div class="movie-title">${escapeHtml(movie.title)}</div>
+                ${metaRow}
+              </div>
+            </div>
           </div>
         `;
       }
