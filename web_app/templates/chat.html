@@ -24,8 +24,14 @@
   <!-- Chat window -->
   <div class="chat-container" id="chatContainer">
     <div id="messageList">
-      <div class="system-welcome text-center text-secondary py-4 small">
+      <div id="welcomeHint" class="system-welcome text-center text-secondary py-4 small">
         Start the conversation — describe the kind of film you are in the mood for.
+      </div>
+      <div id="starterButtons" class="starter-grid">
+        <button class="starter-btn">I love horror movies from the 80s</button>
+        <button class="starter-btn">Recommend something like The Godfather</button>
+        <button class="starter-btn">I want a funny comedy for tonight</button>
+        <button class="starter-btn">Something with great action and sci-fi</button>
       </div>
     </div>
   </div>
@@ -206,6 +212,13 @@
         .replace(/"/g, "&quot;");
     }
 
+    function hideStarters() {
+      const s = document.getElementById("starterButtons");
+      if (s) s.remove();
+      const h = document.getElementById("welcomeHint");
+      if (h) h.remove();
+    }
+
     function setLoading(on) {
       sendBtn.disabled = on;
       userInput.disabled = on;
@@ -215,6 +228,7 @@
     async function sendMessage() {
       const text = userInput.value.trim();
       if (!text) return;
+      hideStarters();
       userInput.value = "";
       appendUserMessage(text);
       const thinking = appendThinking();
@@ -242,6 +256,13 @@
         userInput.focus();
       }
     }
+
+    document.querySelectorAll(".starter-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        userInput.value = btn.textContent.trim();
+        sendMessage();
+      });
+    });
 
     sendBtn.addEventListener("click", sendMessage);
     userInput.addEventListener("keydown", e => {
