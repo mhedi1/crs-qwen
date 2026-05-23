@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CRS Thesis Demo</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body class="home-body d-flex align-items-center justify-content-center min-vh-100">
@@ -22,32 +23,39 @@
         driven by a hybrid neural knowledge-graph pipeline.
       </p>
     </div>
-    <div class="row justify-content-center g-3 mb-5 text-start">
+    <div class="row justify-content-center align-items-stretch g-3 mb-5 text-start">
       <div class="col-md-3">
-        <div class="feature-card p-3">
-          <div class="feature-icon mb-2">&#128202;</div>
-          <div class="small text-secondary fw-semibold">Stage 1</div>
-          <div class="text-white small">KBRD neural retrieval over knowledge graph</div>
+        <div class="feature-card p-2">
+          <i class="bi bi-diagram-3 feature-icon mb-2 d-block"></i>
+          <div class="small feature-stage-label mb-1">Stage 1 — KBRD Retrieval</div>
+          <div class="text-white small mb-1">Knowledge-graph neural retrieval over 50,000+ movies</div>
+          <div class="feature-detail">Returns top-50 candidate films</div>
         </div>
       </div>
       <div class="col-md-3">
-        <div class="feature-card p-3">
-          <div class="feature-icon mb-2">&#9935;</div>
-          <div class="small text-secondary fw-semibold">Stage 2</div>
-          <div class="text-white small">Qwen LLM reranking with seed fusion</div>
+        <div class="feature-card p-2">
+          <i class="bi bi-sort-down feature-icon mb-2 d-block"></i>
+          <div class="small feature-stage-label mb-1">Stage 2 — Qwen Reranking</div>
+          <div class="text-white small mb-1">LLM semantic reranking using dialogue context</div>
+          <div class="feature-detail">Selects best match from top-50 candidates</div>
         </div>
       </div>
       <div class="col-md-3">
-        <div class="feature-card p-3">
-          <div class="feature-icon mb-2">&#128172;</div>
-          <div class="small text-secondary fw-semibold">Stage 3</div>
-          <div class="text-white small">Qwen natural language response generation</div>
+        <div class="feature-card p-2">
+          <i class="bi bi-chat-text feature-icon mb-2 d-block"></i>
+          <div class="small feature-stage-label mb-1">Stage 3 — Response Generation</div>
+          <div class="text-white small mb-1">Natural language response generation</div>
+          <div class="feature-detail">Powered by Qwen3.5:35B zero-shot</div>
         </div>
       </div>
     </div>
     <a href="/chat" class="btn btn-primary btn-lg px-5 py-3 start-btn">
       Start Conversation
     </a>
+    <div class="home-footer mt-4 pt-4">
+      <div class="home-footer-name">Mohamed Hedi Foughali</div>
+      <div class="home-footer-affiliation">Universidad de Jaén &mdash; Final Year Thesis 2025/2026</div>
+    </div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
