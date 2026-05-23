@@ -185,22 +185,46 @@
     }
 
     function appendThinking() {
+      const stages = [
+        "🔍 Retrieving candidates from KBRD...",
+        "⚡ Reranking with Qwen...",
+        "💬 Generating response..."
+      ];
+      let idx = 0;
+
       const div = document.createElement("div");
       div.id = "thinking";
       div.className = "d-flex justify-content-start mb-3";
       div.innerHTML = `
-        <div class="bubble bubble-system thinking">
-          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <div class="bubble bubble-system pipeline-loading">
+          <div class="pipeline-stage-text">${stages[0]}</div>
+          <div class="pipeline-progress-bar">
+            <div class="pipeline-progress-fill"></div>
+          </div>
         </div>
       `;
       messageList.appendChild(div);
       scrollToBottom();
+
+      const stageEl = div.querySelector(".pipeline-stage-text");
+      div._stageInterval = setInterval(() => {
+        stageEl.classList.add("fade-out");
+        setTimeout(() => {
+          idx = (idx + 1) % stages.length;
+          stageEl.textContent = stages[idx];
+          stageEl.classList.remove("fade-out");
+        }, 250);
+      }, 2000);
+
       return div;
     }
 
     function removeThinking() {
       const t = document.getElementById("thinking");
-      if (t) t.remove();
+      if (t) {
+        clearInterval(t._stageInterval);
+        t.remove();
+      }
     }
 
     function escapeHtml(str) {
