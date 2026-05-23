@@ -7,7 +7,7 @@ import spacy
 from typing import List, Dict, Any
 import logging
 import warnings
-from fuzzywuzzy import fuzz
+from rapidfuzz import fuzz
 from reranker import call_qwen
 
 logger = logging.getLogger(__name__)

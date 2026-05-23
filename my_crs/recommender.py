@@ -8,7 +8,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, r"C:\Users\mhfou\Desktop\thesis_crs\baseline_repo\KBRD_project\KBRD")
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(_PROJECT_ROOT, "baseline_repo", "KBRD_project", "KBRD"))
 
 from kbrd_adapter import get_kbrd_candidates
 from reranker import rerank

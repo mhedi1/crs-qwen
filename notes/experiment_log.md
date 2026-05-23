@@ -144,3 +144,5 @@ Measure the contribution of the Qwen reranking stage.
 |---|---|---:|---:|---:|---:|---:|---:|---:|---|
 | KBRD-only | ReDial | ... | ... | ... | ... | ... | ... | ... | Uses KBRD top-1 directly |
 | KBRD + Qwen Format 1 | ReDial | 1301 | 3898 | 0.0459 | 0.1662 | 0.3279 | 0.0832 | 0.1383 | Qwen reranks KBRD candidates |
+
+Note: experiments/eval_format1_redial_20260517_202905.json is an older full KBRD-only run before the final no-leak evaluation protocol and before the --disable_fusion flag existed. The final baseline used for thesis comparison is documented in notes/final_no_leak_ablation_results.md.
