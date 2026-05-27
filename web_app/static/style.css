@@ -275,34 +275,62 @@ body {
   color: var(--text-muted);
 }
 
-.candidate-table { border-collapse: collapse; }
-.candidate-table th {
+.candidate-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+  overflow: visible;
+  position: relative;
+}
+.candidate-chip {
+  font-size: .75rem;
+  padding: 3px 10px;
+  border-radius: 20px;
+  cursor: default;
+  white-space: nowrap;
+  user-select: none;
+  position: relative;
+}
+.candidate-chip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  transform: translateY(-50%);
+  margin-left: 8px;
+  background: #1a1a2e;
+  color: #fff;
   font-size: .7rem;
-  text-transform: uppercase;
-  letter-spacing: .05em;
-  color: var(--text-muted);
-  padding: 4px 10px 4px 0;
-  border-bottom: 1px solid var(--border);
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  border: 1px solid rgba(255,255,255,.12);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .15s ease;
+  z-index: 9999;
 }
-.candidate-table td {
-  padding: 5px 10px 5px 0;
-  color: var(--text-main);
-  vertical-align: middle;
+.candidate-chip:hover::after {
+  opacity: 1;
+  visibility: visible;
 }
-.candidate-row { border-bottom: 1px solid rgba(255,255,255,.04); }
-.candidate-row:last-child { border-bottom: none; }
-
-.rank-col { color: var(--text-muted); font-size: .78rem; width: 24px; }
-
-.source-badge {
-  font-size: .68rem;
-  font-weight: 700;
-  letter-spacing: .04em;
-  padding: 2px 7px;
-  border-radius: 5px;
+.chip-kbrd {
+  background: rgba(59,130,246,.13);
+  border: 1px solid rgba(59,130,246,.4);
+  color: #93b8f8;
 }
-.source-kbrd  { background: rgba(59,130,246,.18); color: var(--kbrd-blue); border: 1px solid rgba(59,130,246,.3); }
-.source-seed  { background: rgba(34,197,94,.15);  color: var(--seed-green); border: 1px solid rgba(34,197,94,.25); }
+.chip-seed {
+  background: rgba(34,197,94,.1);
+  border: 1px solid rgba(34,197,94,.35);
+  color: #6ee09e;
+}
+.chip-selected {
+  background: rgba(246,201,14,.1);
+  border: 1.5px solid #f6c90e;
+  color: #f6c90e;
+}
 
 /* ── Qwen Selected row ───────────────────────────────────── */
 .qwen-selected-row {

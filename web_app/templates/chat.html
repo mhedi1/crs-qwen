@@ -104,30 +104,25 @@
         `;
       }
 
-      // Candidates table HTML
+      // Candidate chips HTML
       let candidatesHtml = "";
       if (candidates && candidates.length > 0) {
-        const rows = candidates.map((c, idx) => {
-          const sourceClass = c.source === "KBRD_NEURAL" ? "source-kbrd" : "source-seed";
-          return `
-            <tr class="candidate-row">
-              <td class="rank-col">${idx + 1}</td>
-              <td>${escapeHtml(c.title || "—")}</td>
-              <td>${(!c.genre  || c.genre.toLowerCase()  === "unknown") ? "—" : escapeHtml(c.genre)}</td>
-              <td>${(!c.decade || c.decade.toLowerCase() === "unknown") ? "—" : escapeHtml(c.decade)}</td>
-              <td><span class="source-badge ${sourceClass}">${escapeHtml(c.source || "—")}</span></td>
-            </tr>
-          `;
+        const chips = candidates.map((c, idx) => {
+          const genre  = (!c.genre  || c.genre.toLowerCase()  === "unknown") ? "—" : c.genre;
+          const decade = (!c.decade || c.decade.toLowerCase() === "unknown") ? "—" : c.decade;
+          const source = c.source || "—";
+          const tooltip = `Source: ${source} | Genre: ${genre} | Decade: ${decade}`;
+          const isSelected = selected_candidate && selected_candidate.title &&
+            c.title && c.title.toLowerCase() === selected_candidate.title.toLowerCase();
+          const chipClass = isSelected
+            ? "candidate-chip chip-selected"
+            : (c.source === "KBRD_NEURAL" ? "candidate-chip chip-kbrd" : "candidate-chip chip-seed");
+          const prefix = isSelected ? "⭐ " : "";
+          return `<span class="${chipClass}" data-tooltip="${escapeHtml(tooltip)}">${prefix}${idx + 1} ${escapeHtml(c.title || "—")}</span>`;
         }).join("");
         candidatesHtml = `
-          <table class="candidate-table w-100">
-            <thead>
-              <tr>
-                <th>#</th><th>Title</th><th>Genre</th><th>Decade</th><th>Source</th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
+          <div class="pipeline-header mb-2">Retrieved Candidates</div>
+          <div class="candidate-chips">${chips}</div>
         `;
       } else {
         candidatesHtml = `<p class="text-secondary small mb-0">Pipeline details not available.</p>`;
@@ -172,7 +167,6 @@
             </button>
             <div class="collapse mt-2" id="${panelId}">
               <div class="pipeline-panel">
-                <div class="pipeline-header mb-2">KBRD Top-5 Candidates</div>
                 ${candidatesHtml}
                 ${qwenSelectedHtml}
               </div>
