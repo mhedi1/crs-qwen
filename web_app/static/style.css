@@ -410,3 +410,143 @@ body {
 
 /* ── Utilities ───────────────────────────────────────────── */
 .system-welcome { color: var(--text-muted) !important; }
+
+/* ── Profile Sidebar ──────────────────────────────────────── */
+.profile-sidebar {
+  width: 220px;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+  padding: 16px;
+  padding-bottom: 40px;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.sidebar-header {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--seed-green);
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+  animation: pulse-dot 2s infinite;
+}
+
+@keyframes pulse-dot {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+}
+
+.sidebar-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.8rem;
+}
+
+.sidebar-label {
+  color: var(--text-muted);
+}
+
+.sidebar-value {
+  color: var(--text-main);
+  font-family: monospace;
+  transition: background-color 0.5s ease;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.sidebar-movies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  transition: background-color 0.5s ease;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.movie-tag {
+  font-size: 0.7rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: var(--text-main);
+}
+
+.sidebar-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 16px 0;
+}
+
+.sidebar-footer {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-align: center;
+  opacity: 0.7;
+}
+
+.fallback-yes { color: var(--danger); font-weight: 600; }
+.fallback-no { color: var(--seed-green); }
+
+/* Flash Animation */
+.flash {
+  animation: flash-bg 0.5s ease-out;
+}
+
+@keyframes flash-bg {
+  0% { background-color: #1e3a5f; }
+  100% { background-color: transparent; }
+}
+
+/* Clickable text for Mentions Toggle */
+.clickable-text {
+  cursor: pointer;
+  color: #3b82f6; /* subtle blue */
+  font-size: 0.7rem;
+  transition: color 0.2s ease;
+  display: inline-block;
+  margin-top: 4px;
+}
+
+.clickable-text:hover {
+  color: #60a5fa; /* lighter blue on hover */
+  text-decoration: underline;
+}
+
+/* ── Follow-up intent indicators ─────────────────────────── */
+.followup-label {
+  font-size: .72rem;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  opacity: 0.7;
+  letter-spacing: .02em;
+}
+
+.followup-pipeline-note {
+  font-size: .72rem;
+  color: var(--text-muted);
+  opacity: 0.55;
+  font-style: italic;
+}

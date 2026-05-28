@@ -4,11 +4,89 @@ import json
 import re
 import difflib
 import spacy
+import requests
 from typing import List, Dict, Any
 import logging
 import warnings
 from rapidfuzz import fuzz
 from reranker import call_qwen
+
+_TMDB_API_KEY = "945e20b8c7b2e5046a046a6e2a1b910c"
+_TMDB_GENRE_MAP = {
+    28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy",
+    80: "Crime", 99: "Documentary", 18: "Drama", 10751: "Family",
+    14: "Fantasy", 36: "History", 27: "Horror", 10402: "Music",
+    9648: "Mystery", 10749: "Romance", 878: "Science Fiction",
+    10770: "TV Movie", 53: "Thriller", 10752: "War", 37: "Western",
+}
+
+_tmdb_cache = {}
+_TMDB_CACHE_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "..", "experiments", "tmdb_cache.json"
+)
+
+try:
+    with open(_TMDB_CACHE_PATH, "r") as f:
+        _tmdb_cache = json.load(f)
+except Exception:
+    _tmdb_cache = {}
+
+
+def _tmdb_enrich(title, year=None):
+    if not _TMDB_API_KEY:
+        return {}
+    cache_key = f"{title}_{year or ''}"
+    if cache_key in _tmdb_cache:
+        return _tmdb_cache[cache_key]
+    try:
+        params = {"query": title, "api_key": _TMDB_API_KEY}
+        if year and str(year).isdigit() and len(str(year)) == 4:
+            params["primary_release_year"] = str(year)
+        resp = requests.get(
+            "https://api.themoviedb.org/3/search/movie",
+            params=params, timeout=2
+        )
+        resp.raise_for_status()
+        results = resp.json().get("results", [])
+        results = [r for r in results if r.get("vote_count", 0) > 10]
+        if not results:
+            return {}
+        title_lower = title.strip().lower()
+        hit = next(
+            (r for r in results
+             if r.get("title", "").strip().lower() == title_lower),
+            None
+        )
+        if hit is None:
+            hit = next(
+                (r for r in results
+                 if title_lower in r.get("title", "").strip().lower()
+                 or r.get("title", "").strip().lower() in title_lower),
+                None
+            )
+        if hit is None:
+            hit = results[0]
+        genre_ids = hit.get("genre_ids", [])
+        genre = ", ".join(
+            _TMDB_GENRE_MAP[gid] for gid in genre_ids
+            if gid in _TMDB_GENRE_MAP
+        )
+        year_str = hit.get("release_date", "")[:4]
+        decade = ""
+        if year_str.isdigit():
+            decade = str((int(year_str) // 10) * 10) + "s"
+        result = {"genre": genre, "decade": decade}
+        _tmdb_cache[cache_key] = result
+        try:
+            with open(_TMDB_CACHE_PATH, "w") as f:
+                json.dump(_tmdb_cache, f)
+        except Exception:
+            pass
+        return result
+    except Exception:
+        return {}
+
 
 logger = logging.getLogger(__name__)
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -315,6 +393,23 @@ def _enrich_candidate(candidate):
         if entry.get('year') and \
            not candidate.get('year'):
             candidate['year'] = str(entry['year'])
+
+    if not candidate.get('genre') or candidate.get('genre') == 'Unknown':
+        tmdb = _tmdb_enrich(
+            candidate.get('title', ''),
+            candidate.get('year')
+        )
+        if tmdb.get('genre'):
+            candidate['genre'] = tmdb['genre']
+
+    if not candidate.get('decade') or candidate.get('decade') == 'Unknown':
+        tmdb_data = _tmdb_enrich(
+            candidate.get('title', ''),
+            candidate.get('year')
+        )
+        if tmdb_data.get('decade'):
+            candidate['decade'] = tmdb_data['decade']
+
     return candidate
 
 

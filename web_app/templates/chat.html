@@ -21,32 +21,88 @@
     <button id="clearBtn" class="btn btn-sm btn-outline-danger">Clear Chat</button>
   </nav>
 
-  <!-- Chat window -->
-  <div class="chat-container" id="chatContainer">
-    <div id="messageList">
-      <div id="welcomeHint" class="system-welcome text-center text-secondary py-4 small">
-        Start the conversation — describe the kind of film you are in the mood for.
+  <!-- Main Body Flex -->
+  <div class="d-flex flex-row flex-grow-1 overflow-hidden w-100">
+    <!-- Chat window & Input -->
+    <div class="d-flex flex-column flex-grow-1 overflow-hidden position-relative">
+      <div class="chat-container" id="chatContainer">
+        <div id="messageList">
+          <div id="welcomeHint" class="system-welcome text-center text-secondary py-4 small">
+            Start the conversation — describe the kind of film you are in the mood for.
+          </div>
+          <div id="starterButtons" class="starter-grid">
+            <button class="starter-btn">I love horror movies from the 80s</button>
+            <button class="starter-btn">Recommend something like The Godfather</button>
+            <button class="starter-btn">I want a funny comedy for tonight</button>
+            <button class="starter-btn">Something with great action and sci-fi</button>
+          </div>
+        </div>
       </div>
-      <div id="starterButtons" class="starter-grid">
-        <button class="starter-btn">I love horror movies from the 80s</button>
-        <button class="starter-btn">Recommend something like The Godfather</button>
-        <button class="starter-btn">I want a funny comedy for tonight</button>
-        <button class="starter-btn">Something with great action and sci-fi</button>
+    
+      <!-- Input bar -->
+      <div class="input-bar">
+        <div class="input-group">
+          <input
+            type="text"
+            id="userInput"
+            class="form-control chat-input"
+            placeholder="Describe the film you want…"
+            autocomplete="off"
+          >
+          <button id="sendBtn" class="btn btn-primary px-4">Send</button>
+        </div>
       </div>
     </div>
-  </div>
-
-  <!-- Input bar -->
-  <div class="input-bar">
-    <div class="input-group">
-      <input
-        type="text"
-        id="userInput"
-        class="form-control chat-input"
-        placeholder="Describe the film you want…"
-        autocomplete="off"
-      >
-      <button id="sendBtn" class="btn btn-primary px-4">Send</button>
+    
+    <!-- Profile Sidebar -->
+    <div class="profile-sidebar d-none d-xl-flex flex-column">
+      <div class="sidebar-header d-flex align-items-center mb-3">
+        <div class="pulse-dot me-2"></div>
+        <span>SYSTEM INTEL</span>
+      </div>
+      
+      <div class="sidebar-section mb-3">
+        <div class="sidebar-title">CONVERSATION</div>
+        <div class="sidebar-row">
+          <span class="sidebar-label">Turn:</span>
+          <span class="sidebar-value" id="profile-turn">0</span>
+        </div>
+        <div class="sidebar-row">
+          <span class="sidebar-label">Seeds extracted:</span>
+          <span class="sidebar-value" id="profile-seeds">0</span>
+        </div>
+        <div class="sidebar-row">
+          <span class="sidebar-label">Fallback:</span>
+          <span class="sidebar-value fallback-no" id="profile-fallback">NO</span>
+        </div>
+      </div>
+      
+      <div class="sidebar-divider"></div>
+      
+      <div class="sidebar-section mb-3">
+        <div class="sidebar-title">USER PREFERENCES</div>
+        <div class="sidebar-row">
+          <span class="sidebar-label">Genre:</span>
+          <span class="sidebar-value" id="profile-genres">—</span>
+        </div>
+        <div class="sidebar-row">
+          <span class="sidebar-label">Decade:</span>
+          <span class="sidebar-value" id="profile-decades">—</span>
+        </div>
+      </div>
+      
+      <div class="sidebar-divider"></div>
+      
+      <div class="sidebar-section flex-grow-1">
+        <div class="sidebar-title mb-2">MENTIONED FILMS</div>
+        <div class="sidebar-movies" id="profile-movies">
+          <span class="text-secondary small">—</span>
+        </div>
+      </div>
+      
+      <div class="sidebar-footer mt-auto pt-3">
+        Mohamed Hedi Foughali
+      </div>
     </div>
   </div>
 
@@ -57,6 +113,8 @@
     const userInput = document.getElementById("userInput");
     const sendBtn = document.getElementById("sendBtn");
     const clearBtn = document.getElementById("clearBtn");
+    
+    let chatHistory = [];
 
     function scrollToBottom() {
       chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: "smooth" });
@@ -75,12 +133,13 @@
     }
 
     function appendSystemMessage(data) {
-      const { response, movie, candidates, selected_candidate, turn_number } = data;
+      const { response, movie, candidates, selected_candidate, turn_number, intent } = data;
       const panelId = "panel-" + turn_number;
+      const isFollowUp = intent === "FOLLOW_UP";
 
-      // Movie card HTML
+      // Movie card HTML (suppressed for follow-up turns)
       let movieHtml = "";
-      if (movie && movie.title && movie.title.toLowerCase() !== "unknown") {
+      if (!isFollowUp && movie && movie.title && movie.title.toLowerCase() !== "unknown") {
         const genreBadge = (movie.genre && movie.genre.toLowerCase() !== "unknown")
           ? `<span class="genre-tag">${escapeHtml(movie.genre)}</span>` : "";
         const decadeBadge = (movie.decade && movie.decade.toLowerCase() !== "unknown")
@@ -104,58 +163,63 @@
         `;
       }
 
-      // Candidate chips HTML
-      let candidatesHtml = "";
-      if (candidates && candidates.length > 0) {
-        const chips = candidates.map((c, idx) => {
-          const genre  = (!c.genre  || c.genre.toLowerCase()  === "unknown") ? "—" : c.genre;
-          const decade = (!c.decade || c.decade.toLowerCase() === "unknown") ? "—" : c.decade;
-          const source = c.source || "—";
-          const tooltip = `Source: ${source} | Genre: ${genre} | Decade: ${decade}`;
-          const isSelected = selected_candidate && selected_candidate.title &&
-            c.title && c.title.toLowerCase() === selected_candidate.title.toLowerCase();
-          const chipClass = isSelected
-            ? "candidate-chip chip-selected"
-            : (c.source === "KBRD_NEURAL" ? "candidate-chip chip-kbrd" : "candidate-chip chip-seed");
-          const prefix = isSelected ? "⭐ " : "";
-          return `<span class="${chipClass}" data-tooltip="${escapeHtml(tooltip)}">${prefix}${idx + 1} ${escapeHtml(c.title || "—")}</span>`;
-        }).join("");
-        candidatesHtml = `
-          <div class="pipeline-header mb-2">Retrieved Candidates</div>
-          <div class="candidate-chips">${chips}</div>
-        `;
-      } else {
-        candidatesHtml = `<p class="text-secondary small mb-0">Pipeline details not available.</p>`;
-      }
+      // Top intent label removed as requested
 
-      // Qwen Selected row
-      let qwenSelectedHtml = "";
-      if (selected_candidate && selected_candidate.title) {
-        let rankNote = "";
-        if (selected_candidate.in_top5 && selected_candidate.kbrd_rank !== null) {
-          rankNote = `(ranked <strong>#${selected_candidate.kbrd_rank}</strong> in KBRD list)` +
-                     ` <span class="in-top5-note">(in top-5)</span>`;
-        } else if (selected_candidate.in_top5) {
-          rankNote = `<span class="in-top5-note">(in top-5)</span>`;
-        } else {
-          rankNote = `<span class="not-in-top5-note">(ranked outside KBRD top-5)</span>`;
-        }
-        qwenSelectedHtml = `
-          <div class="qwen-selected-row mt-3">
-            <span class="qwen-selected-label">Qwen Selected:</span>
-            <span class="qwen-selected-title">${escapeHtml(selected_candidate.title)}</span>
-            <span class="qwen-selected-rank">${rankNote}</span>
+      // Pipeline section
+      let pipelineHtml = "";
+      if (isFollowUp) {
+        pipelineHtml = `
+          <div class="pipeline-toggle mt-2">
+            <span class="followup-pipeline-note">&#8629; Follow-up — pipeline not re-run</span>
           </div>
         `;
-      }
+      } else {
+        // Candidate chips HTML
+        let candidatesHtml = "";
+        if (candidates && candidates.length > 0) {
+          const chips = candidates.map((c, idx) => {
+            const genre  = (!c.genre  || c.genre.toLowerCase()  === "unknown") ? "—" : c.genre;
+            const decade = (!c.decade || c.decade.toLowerCase() === "unknown") ? "—" : c.decade;
+            const source = c.source || "—";
+            const tooltip = `Source: ${source} | Genre: ${genre} | Decade: ${decade}`;
+            const isSelected = selected_candidate && selected_candidate.title &&
+              c.title && c.title.toLowerCase() === selected_candidate.title.toLowerCase();
+            const chipClass = isSelected
+              ? "candidate-chip chip-selected"
+              : (c.source === "KBRD_NEURAL" ? "candidate-chip chip-kbrd" : "candidate-chip chip-seed");
+            const prefix = isSelected ? "⭐ " : "";
+            return `<span class="${chipClass}" data-tooltip="${escapeHtml(tooltip)}">${prefix}${idx + 1} ${escapeHtml(c.title || "—")}</span>`;
+          }).join("");
+          candidatesHtml = `
+            <div class="pipeline-header mb-2">Retrieved Candidates</div>
+            <div class="candidate-chips">${chips}</div>
+          `;
+        } else {
+          candidatesHtml = `<p class="text-secondary small mb-0">Pipeline details not available.</p>`;
+        }
 
-      const div = document.createElement("div");
-      div.className = "d-flex justify-content-start mb-4";
-      div.innerHTML = `
-        <div class="bubble bubble-system">
-          <div class="turn-label">Turn ${turn_number}</div>
-          <div class="bubble-text md-content">${marked.parse(response || "")}</div>
-          ${movieHtml}
+        // Qwen Selected row
+        let qwenSelectedHtml = "";
+        if (selected_candidate && selected_candidate.title) {
+          let rankNote = "";
+          if (selected_candidate.in_top5 && selected_candidate.kbrd_rank !== null) {
+            rankNote = `(ranked <strong>#${selected_candidate.kbrd_rank}</strong> in KBRD list)` +
+                       ` <span class="in-top5-note">(in top-5)</span>`;
+          } else if (selected_candidate.in_top5) {
+            rankNote = `<span class="in-top5-note">(in top-5)</span>`;
+          } else {
+            rankNote = `<span class="not-in-top5-note">(ranked outside KBRD top-5)</span>`;
+          }
+          qwenSelectedHtml = `
+            <div class="qwen-selected-row mt-3">
+              <span class="qwen-selected-label">Qwen Selected:</span>
+              <span class="qwen-selected-title">${escapeHtml(selected_candidate.title)}</span>
+              <span class="qwen-selected-rank">${rankNote}</span>
+            </div>
+          `;
+        }
+
+        pipelineHtml = `
           <div class="pipeline-toggle mt-2">
             <button
               class="btn btn-sm btn-outline-secondary pipeline-btn"
@@ -172,18 +236,112 @@
               </div>
             </div>
           </div>
+        `;
+      }
+
+      const div = document.createElement("div");
+      div.className = "d-flex justify-content-start mb-4";
+      div.innerHTML = `
+        <div class="bubble bubble-system">
+          <div class="turn-label">Turn ${turn_number}</div>
+          <div class="bubble-text md-content">${marked.parse(response || "")}</div>
+          ${movieHtml}
+          ${pipelineHtml}
         </div>
       `;
       messageList.appendChild(div);
       scrollToBottom();
+
+      if (!isFollowUp && data.profile) {
+        updateProfile(data.profile);
+      } else if (isFollowUp && data.profile) {
+        // Only flash the turn counter — do not update preference fields
+        const turnEl = document.getElementById("profile-turn");
+        if (turnEl) {
+          const newVal = String(data.profile.turn);
+          if (turnEl.innerText !== newVal) {
+            turnEl.innerText = newVal;
+            turnEl.classList.remove("flash");
+            void turnEl.offsetWidth;
+            turnEl.classList.add("flash");
+          }
+        }
+      }
+    }
+    
+    window.toggleMentions = function() {
+      const hm = document.getElementById("hidden-mentions");
+      const mt = document.getElementById("mentions-toggle");
+      if (hm && mt) {
+        if (hm.style.display === "none") {
+          hm.style.display = "flex";
+          mt.textContent = "Show less";
+        } else {
+          hm.style.display = "none";
+          const count = hm.querySelectorAll('.movie-tag').length;
+          mt.textContent = "+" + count + " more";
+        }
+      }
+    };
+    
+    function updateProfile(profile) {
+      if (!profile) return;
+      
+      function flashAndUpdate(id, newValue, isFallback = false) {
+        const el = document.getElementById(id);
+        if (el && el.innerText !== newValue) {
+          el.innerText = newValue;
+          el.classList.remove("flash");
+          void el.offsetWidth;
+          el.classList.add("flash");
+          
+          if (isFallback) {
+            el.className = "sidebar-value flash " + (newValue === "YES" ? "fallback-yes" : "fallback-no");
+          }
+        }
+      }
+      
+      flashAndUpdate("profile-turn", String(profile.turn));
+      flashAndUpdate("profile-seeds", String(profile.seed_count));
+      
+      const fbStr = profile.fallback_used ? "YES" : "NO";
+      flashAndUpdate("profile-fallback", fbStr, true);
+      
+      const genresStr = profile.genres.length > 0 ? profile.genres.join(", ") : "—";
+      flashAndUpdate("profile-genres", genresStr);
+      
+      const decadesStr = profile.decades.length > 0 ? profile.decades.join(", ") : "—";
+      flashAndUpdate("profile-decades", decadesStr);
+      
+      const moviesContainer = document.getElementById("profile-movies");
+      let moviesHtml = "";
+      if (profile.mentioned_movies.length === 0) {
+        moviesHtml = '<span class="text-secondary small">—</span>';
+      } else {
+        const toShow = profile.mentioned_movies.slice(0, 6);
+        const hidden = profile.mentioned_movies.slice(6);
+        moviesHtml = toShow.map(m => `<span class="movie-tag">${escapeHtml(m)}</span>`).join("");
+        
+        if (hidden.length > 0) {
+          const hiddenHtml = hidden.map(m => `<span class="movie-tag">${escapeHtml(m)}</span>`).join("");
+          moviesHtml += `
+            <div id="hidden-mentions" style="display: none; margin-top: 8px; width: 100%; gap: 6px; flex-wrap: wrap;">
+              ${hiddenHtml}
+            </div>
+            <span id="mentions-toggle" class="clickable-text" onclick="toggleMentions()">+${hidden.length} more</span>
+          `;
+        }
+      }
+      
+      if (moviesContainer.innerHTML !== moviesHtml) {
+        moviesContainer.innerHTML = moviesHtml;
+        moviesContainer.classList.remove("flash");
+        void moviesContainer.offsetWidth;
+        moviesContainer.classList.add("flash");
+      }
     }
 
     function appendThinking() {
-      const stages = [
-        "🔍 Retrieving candidates from KBRD...",
-        "⚡ Reranking with Qwen...",
-        "💬 Generating response..."
-      ];
       let idx = 0;
 
       const div = document.createElement("div");
@@ -191,7 +349,7 @@
       div.className = "d-flex justify-content-start mb-3";
       div.innerHTML = `
         <div class="bubble bubble-system pipeline-loading">
-          <div class="pipeline-stage-text">${stages[0]}</div>
+          <div class="pipeline-stage-text">🤔 Analysing your message...</div>
           <div class="pipeline-progress-bar">
             <div class="pipeline-progress-fill"></div>
           </div>
@@ -200,25 +358,42 @@
       messageList.appendChild(div);
       scrollToBottom();
 
-      const stageEl = div.querySelector(".pipeline-stage-text");
-      div._stageInterval = setInterval(() => {
-        stageEl.classList.add("fade-out");
-        setTimeout(() => {
-          idx = (idx + 1) % stages.length;
-          stageEl.textContent = stages[idx];
+      // Return a controller object to manage the animation stages
+      return {
+        div: div,
+        startCycling: function() {
+          const stages = [
+            "🔍 Retrieving candidates from KBRD...",
+            "⚡ Reranking with Qwen...",
+            "💬 Generating response..."
+          ];
+          const stageEl = div.querySelector(".pipeline-stage-text");
+          stageEl.textContent = stages[0];
+          
+          if (div._stageInterval) clearInterval(div._stageInterval);
+          div._stageInterval = setInterval(() => {
+            stageEl.classList.add("fade-out");
+            setTimeout(() => {
+              idx = (idx + 1) % stages.length;
+              stageEl.textContent = stages[idx];
+              stageEl.classList.remove("fade-out");
+            }, 250);
+          }, 2000);
+        },
+        setStatic: function(msg) {
+          if (div._stageInterval) {
+            clearInterval(div._stageInterval);
+            div._stageInterval = null;
+          }
+          const stageEl = div.querySelector(".pipeline-stage-text");
+          stageEl.textContent = msg;
           stageEl.classList.remove("fade-out");
-        }, 250);
-      }, 2000);
-
-      return div;
-    }
-
-    function removeThinking() {
-      const t = document.getElementById("thinking");
-      if (t) {
-        clearInterval(t._stageInterval);
-        t.remove();
-      }
+        },
+        remove: function() {
+          if (div._stageInterval) clearInterval(div._stageInterval);
+          div.remove();
+        }
+      };
     }
 
     function escapeHtml(str) {
@@ -249,20 +424,50 @@
       hideStarters();
       userInput.value = "";
       appendUserMessage(text);
-      const thinking = appendThinking();
       setLoading(true);
+      
+      const thinkingCtrl = appendThinking();
 
       try {
+        // Step 1: Classify intent
+        let intent = "NEW_PREFERENCE";
+        try {
+          const classRes = await fetch("/api/classify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: text, history: chatHistory })
+          });
+          if (classRes.ok) {
+            const classData = await classRes.json();
+            intent = classData.intent || "NEW_PREFERENCE";
+          }
+        } catch (err) {
+          console.warn("Classify failed, defaulting to NEW_PREFERENCE", err);
+        }
+
+        // Adjust animation based on intent
+        if (intent === "FOLLOW_UP") {
+          thinkingCtrl.setStatic("💬 Generating response...");
+        } else {
+          thinkingCtrl.startCycling();
+        }
+
+        chatHistory.push({ role: "user", content: text });
+
+        // Step 2: Call full chat pipeline
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: text })
         });
         const data = await res.json();
-        removeThinking();
+        
+        chatHistory.push({ role: "system", content: data.response || "" });
+        
+        thinkingCtrl.remove();
         appendSystemMessage(data);
       } catch (err) {
-        removeThinking();
+        thinkingCtrl.remove();
         appendSystemMessage({
           response: "A network error occurred. Please check your connection and try again.",
           movie: null,
@@ -289,6 +494,7 @@
 
     clearBtn.addEventListener("click", async () => {
       await fetch("/api/clear", { method: "POST" });
+      chatHistory = [];
       messageList.innerHTML = `
         <div class="system-welcome text-center text-secondary py-4 small">
           Conversation cleared. Start fresh below.
