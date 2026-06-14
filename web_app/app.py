@@ -4,12 +4,29 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template, request, session, jsonify
 import traceback
+import re
 import requests
 import yaml
+import secrets
+
+from dotenv import load_dotenv
+load_dotenv()
+
+_cfg_path = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "my_crs", "config.yaml"
+)
+with open(_cfg_path) as _f:
+    _cfg = yaml.safe_load(_f)
 
 app = Flask(__name__)
-app.secret_key = "crs_thesis_demo_2024"
-TMDB_API_KEY = "945e20b8c7b2e5046a046a6e2a1b910c"
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(16))
+TMDB_API_KEY = os.environ.get("TMDB_API_KEY")
+if not TMDB_API_KEY:
+    raise EnvironmentError(
+        "TMDB_API_KEY environment variable is not set. "
+        "See .env.example at the project root."
+    )
 
 TMDB_GENRE_MAP = {
     28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy",
@@ -18,6 +35,79 @@ TMDB_GENRE_MAP = {
     9648: "Mystery", 10749: "Romance", 878: "Science Fiction",
     10770: "TV Movie", 53: "Thriller", 10752: "War", 37: "Western",
 }
+
+_GENRE_KEYWORD_MAP = {
+    "horror": "Horror",       "scary": "Horror",
+    "comedy": "Comedy",       "comedic": "Comedy",
+    "action": "Action",
+    "thriller": "Thriller",
+    "romance": "Romance",     "romantic": "Romance",
+    "drama": "Drama",         "dramatic": "Drama",
+    "sci-fi": "Sci-Fi",       "scifi": "Sci-Fi",
+    "fantasy": "Fantasy",
+    "mystery": "Mystery",
+    "animation": "Animation", "animated": "Animation",
+    "documentary": "Documentary",
+    "western": "Western",
+    "war": "War",
+    "crime": "Crime",
+    "adventure": "Adventure",
+}
+
+_DECADE_PATTERNS = [
+    (r"\b50s\b|\b1950s\b|\bfifties\b",               "1950s"),
+    (r"\b60s\b|\b1960s\b|\bsixties\b",               "1960s"),
+    (r"\b70s\b|\b1970s\b|\bseventies\b",             "1970s"),
+    (r"\b80s\b|\b1980s\b|\brighties\b|\beighties\b", "1980s"),
+    (r"\b90s\b|\b1990s\b|\bnineties\b",              "1990s"),
+    (r"\b00s\b|\b2000s\b",                            "2000s"),
+    (r"\b2010s\b",                                    "2010s"),
+    (r"\b2020s\b",                                    "2020s"),
+]
+
+
+def _extract_genres(text: str) -> list:
+    found = []
+    t = text.lower()
+    for phrase in ("science fiction", "sci fi", "sci-fi"):
+        if phrase in t and "Sci-Fi" not in found:
+            found.append("Sci-Fi")
+    for token in re.findall(r"[\w'-]+", t):
+        genre = _GENRE_KEYWORD_MAP.get(token)
+        if genre and genre not in found:
+            found.append(genre)
+    return found
+
+
+def _extract_decades(text: str) -> list:
+    found = []
+    t = text.lower()
+    for pattern, decade in _DECADE_PATTERNS:
+        if re.search(pattern, t) and decade not in found:
+            found.append(decade)
+    return found
+
+
+def _extract_mentioned_movies(text: str) -> list:
+    found = []
+    for m in re.finditer(r'["“”‘’]([^"\']{3,60})["“”‘’]', text):
+        title = m.group(1).strip().title()
+        if title not in found:
+            found.append(title)
+    for m in re.finditer(
+        r'\b(?:like|loved?|watch(?:ed)?|seen|saw|enjoy(?:ed)?|similar to|such as|films? like|movies? like)'
+        r'\s+([A-Z][A-Za-z0-9 :\'!&\-]{1,50}?)(?=[,\.!?\n]|$|\s+(?:and|but|or|which|because)\b)',
+        text,
+    ):
+        title = m.group(1).strip()
+        if len(title) > 2 and title not in found:
+            found.append(title)
+    for m in re.finditer(r'\b([A-Z][a-z0-9]*(?:\s+(?:[a-z]{1,3}\s+)?[A-Z][a-z0-9]*)+)\b', text):
+        title = m.group(1).strip()
+        if len(title) > 2 and title not in found:
+            found.append(title)
+    return found
+
 
 _recommender = None
 _recommender_error = None
@@ -32,7 +122,7 @@ def enrich_with_tmdb(title, year=None):
         resp = requests.get(
             "https://api.themoviedb.org/3/search/movie",
             params=params,
-            timeout=2,
+            timeout=_cfg["tmdb"]["timeout"],
         )
         resp.raise_for_status()
         results = resp.json().get("results", [])
@@ -95,7 +185,7 @@ def get_recommender():
         from reranker import rerank
         from response_generator import generate_response
 
-        def custom_recommender(dialogue_history):
+        def custom_recommender(dialogue_history, previously_recommended=None):
             turns = []
             for turn in dialogue_history:
                 role = "User" if turn["role"] == "user" else "System"
@@ -105,15 +195,15 @@ def get_recommender():
             diagnostics = {}
             # Safely pass diagnostics dictionary so it gets populated
             try:
-                candidates, detected_decades = get_kbrd_candidates(dialogue_str, top_k=50, diagnostics=diagnostics)
+                candidates, detected_decades = get_kbrd_candidates(dialogue_str, top_k=_cfg["pipeline"]["top_k_candidates"], diagnostics=diagnostics)
             except TypeError:
                 # If diagnostics argument is removed in future
-                candidates, detected_decades = get_kbrd_candidates(dialogue_str, top_k=50)
+                candidates, detected_decades = get_kbrd_candidates(dialogue_str, top_k=_cfg["pipeline"]["top_k_candidates"])
                 
             diagnostics["detected_decades"] = detected_decades
             
-            selected_movie, _ = rerank(dialogue_str, candidates, era_hints=detected_decades)
-            response = generate_response(dialogue_str, selected_movie)
+            selected_movie, _ = rerank(dialogue_str, candidates, era_hints=detected_decades, previously_recommended=previously_recommended)
+            response = generate_response(dialogue_str, selected_movie, previously_recommended=previously_recommended)
             
             return {
                 "response": response,
@@ -198,8 +288,14 @@ def classify_intent(message: str, history: list) -> str:
 
         resp = requests.post(
             url,
-            json={"model": model, "messages": prompt, "stream": False, "think": False, "temperature": 0},
-            timeout=10
+            json={
+                "model": model,
+                "messages": prompt,
+                "stream": cfg.get("stream", False),
+                "think": cfg.get("think", False),
+                "temperature": cfg.get("temperature", 0),
+            },
+            timeout=cfg.get("intent_timeout", 10),
         )
         resp.raise_for_status()
         text = resp.json()["message"]["content"].strip().upper()
@@ -211,7 +307,7 @@ def classify_intent(message: str, history: list) -> str:
         return "NEW_PREFERENCE"
 
 
-def _generate_followup_response(dialogue_history: list, last_movie: dict) -> str:
+def _generate_followup_response(dialogue_history: list, last_movie: dict, previously_recommended: list = None) -> str:
     """Generate a conversational follow-up response using the response generator."""
     try:
         my_crs_path = os.path.join(
@@ -224,7 +320,7 @@ def _generate_followup_response(dialogue_history: list, last_movie: dict) -> str
         for turn in dialogue_history:
             role = "User" if turn["role"] == "user" else "System"
             turns.append(f"{role}: {turn['content']}")
-        return generate_response("\n".join(turns), last_movie)
+        return generate_response("\n".join(turns), last_movie, previously_recommended)
     except Exception as e:
         print(f"[FOLLOW_UP] Response generation failed: {e}")
         title = last_movie.get("title", "the movie I recommended")
@@ -255,6 +351,10 @@ def api_chat():
 
     if "history" not in session:
         session["history"] = []
+    
+    if "turn" not in session:
+        session["turn"] = 0
+    session["turn"] += 1
 
     intent = classify_intent(user_message, session["history"])
 
@@ -264,20 +364,36 @@ def api_chat():
     # ── FOLLOW_UP path: skip KBRD retrieval and Qwen reranker ──────────────
     if intent == "FOLLOW_UP" and session.get("last_movie"):
         last_movie = session["last_movie"]
-        response_text = _generate_followup_response(history, last_movie)
+        response_text = _generate_followup_response(history, last_movie, session.get("previously_recommended", []))
 
         history.append({"role": "system", "content": response_text})
         session["history"] = history
 
-        turn_number = sum(1 for m in history if m["role"] == "system")
+        turn_number = session["turn"]
 
         if "profile" not in session:
             session["profile"] = {
                 "genres": [], "decades": [], "mentioned_movies": [],
                 "turn": 0, "seed_count": 0, "fallback_used": False
             }
+        if "mentioned_films" not in session:
+            session["mentioned_films"] = []
+        if "previously_recommended" not in session:
+            session["previously_recommended"] = []
+
         profile = session["profile"]
-        profile["turn"] = turn_number
+        for g in _extract_genres(user_message):
+            if g not in profile["genres"]:
+                profile["genres"].append(g)
+        for d in _extract_decades(user_message):
+            if d not in profile["decades"]:
+                profile["decades"].append(d)
+        for mv in _extract_mentioned_movies(user_message):
+            if mv not in session["mentioned_films"]:
+                session["mentioned_films"].append(mv)
+        profile["mentioned_movies"] = session["mentioned_films"]
+        profile["seed_count"] = len(session["mentioned_films"])
+        profile["turn"] = session["turn"]
         session["profile"] = profile
         session.modified = True
 
@@ -293,6 +409,8 @@ def api_chat():
 
     # ── NEW_PREFERENCE path: run full pipeline ──────────────────────────────
     recommender, load_error = get_recommender()
+    if "previously_recommended" not in session:
+        session["previously_recommended"] = []
 
     if recommender is None:
         error_msg = (
@@ -303,7 +421,7 @@ def api_chat():
         history.append({"role": "system", "content": error_msg})
         session["history"] = history
         session.modified = True
-        turn_number = sum(1 for m in history if m["role"] == "system")
+        turn_number = session["turn"]
         return jsonify({
             "response": error_msg,
             "movie": None,
@@ -314,8 +432,12 @@ def api_chat():
         })
 
     selected_candidate = None
+    result = {}
     try:
-        result = recommender(history)
+        try:
+            result = recommender(history, previously_recommended=session["previously_recommended"])
+        except TypeError:
+            result = recommender(history)
         response_text = result.get("response", "")
         movie = result.get("movie", None)
         candidates = result.get("candidates", [])  # pipeline already returns top-5
@@ -363,7 +485,7 @@ def api_chat():
     history.append({"role": "system", "content": response_text})
     session["history"] = history
 
-    turn_number = sum(1 for m in history if m["role"] == "system")
+    turn_number = session["turn"]
 
     # Profile Update
     if "profile" not in session:
@@ -379,39 +501,29 @@ def api_chat():
     profile = session["profile"]
     diagnostics = result.get("diagnostics", {})
 
-    import re
-    extracted_seeds = diagnostics.get("extracted_seeds", [])
-    for seed_str in extracted_seeds:
-        if "(Genre Mapping)" in seed_str:
-            match = re.match(r"'(.*?)'", seed_str)
-            if match:
-                val = match.group(1).title()
-                if val not in profile["genres"]:
-                    profile["genres"].append(val)
-        elif "(Exact Movie Match)" in seed_str:
-            match = re.match(r"'(.*?)'", seed_str)
-            if match:
-                val = match.group(1).title()
-                if val not in profile["mentioned_movies"]:
-                    profile["mentioned_movies"].append(val)
-        elif "(Fuzzy Movie Match)" in seed_str:
-            match = re.search(r"-> '(.*?)'", seed_str)
-            if match:
-                val = match.group(1).title()
-                if val not in profile["mentioned_movies"]:
-                    profile["mentioned_movies"].append(val)
-
-    for d in diagnostics.get("detected_decades", []):
+    for g in _extract_genres(user_message):
+        if g not in profile["genres"]:
+            profile["genres"].append(g)
+    for d in _extract_decades(user_message):
         if d not in profile["decades"]:
             profile["decades"].append(d)
+            
+    if "mentioned_films" not in session:
+        session["mentioned_films"] = []
+    for mv in _extract_mentioned_movies(user_message):
+        if mv not in session["mentioned_films"]:
+            session["mentioned_films"].append(mv)
+    profile["mentioned_movies"] = session["mentioned_films"]
 
-    profile["turn"] = turn_number
-    profile["seed_count"] = diagnostics.get("num_extracted_seeds", 0)
+    profile["turn"] = session["turn"]
+    profile["seed_count"] = len(session["mentioned_films"])
     profile["fallback_used"] = diagnostics.get("weak_seed_fallback", False)
 
     session["profile"] = profile
     if movie:
         session["last_movie"] = movie
+        if movie.get("title") and movie["title"] not in session["previously_recommended"]:
+            session["previously_recommended"].append(movie["title"])
     session.modified = True
 
     return jsonify({
@@ -448,9 +560,26 @@ def api_classify():
 @app.route("/api/clear", methods=["POST"])
 def api_clear():
     session["history"] = []
+    session["turn"] = 0
+    session["mentioned_films"] = []
+    session["previously_recommended"] = []
+    session["profile"] = {
+        "genres": [],
+        "decades": [],
+        "mentioned_movies": [],
+        "turn": 0,
+        "seed_count": 0,
+        "fallback_used": False,
+    }
+    session["last_movie"] = None
     session.modified = True
     return jsonify({"status": "cleared"})
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    _webapp = _cfg.get("webapp", {})
+    app.run(
+        host=_webapp.get("host", "0.0.0.0"),
+        port=_webapp.get("port", 5000),
+        debug=_webapp.get("debug", False),
+    )

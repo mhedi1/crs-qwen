@@ -24,17 +24,21 @@ def _fallback_response(movie: dict) -> str:
                 f"I think it fits well with what you described.")
 
 
-def generate_response(history: str, selected_movie: dict) -> str:
+def generate_response(history: str, selected_movie: dict, previously_recommended: list = None) -> str:
     if USE_FAKE_MODE:
         return _fallback_response(selected_movie)
 
-    history = truncate_history(history, max_turns=5)
+    history = truncate_history(history)
     
+    sys_content = "You are a helpful and natural conversational movie recommender."
+    sys_content += " CRITICAL: You must evaluate the user's MOST RECENT request (e.g., a specific genre like 'Comedy'). If the retrieved KBRD candidate list does not contain a strong match for this new constraint, you must acknowledge the gap in your response, explain why you are recommending the selected film, and attempt to bridge the thematic gap."
+    if previously_recommended:
+        sys_content += f" CRITICAL: Do not recommend any of the following movies as they have already been suggested this session: {previously_recommended}"
+
     messages = [
         {
             "role": "system",
-            "content": "You are a helpful and natural "
-                       "conversational movie recommender."
+            "content": sys_content
         },
         {
             "role": "user", 

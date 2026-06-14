@@ -8,10 +8,23 @@ import requests
 from typing import List, Dict, Any
 import logging
 import warnings
+import yaml
 from rapidfuzz import fuzz
 from reranker import call_qwen
 
-_TMDB_API_KEY = "945e20b8c7b2e5046a046a6e2a1b910c"
+from dotenv import load_dotenv
+load_dotenv()
+
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")) as _f:
+    _cfg = yaml.safe_load(_f)
+
+_TMDB_API_KEY = os.environ.get("TMDB_API_KEY")
+if not _TMDB_API_KEY:
+    raise EnvironmentError(
+        "TMDB_API_KEY environment variable is not set. "
+        "See .env.example at the project root."
+    )
+_TMDB_TIMEOUT = _cfg["tmdb"]["timeout"]
 _TMDB_GENRE_MAP = {
     28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy",
     80: "Crime", 99: "Documentary", 18: "Drama", 10751: "Family",
@@ -45,7 +58,7 @@ def _tmdb_enrich(title, year=None):
             params["primary_release_year"] = str(year)
         resp = requests.get(
             "https://api.themoviedb.org/3/search/movie",
-            params=params, timeout=2
+            params=params, timeout=_TMDB_TIMEOUT
         )
         resp.raise_for_status()
         results = resp.json().get("results", [])
@@ -413,8 +426,15 @@ def _enrich_candidate(candidate):
     return candidate
 
 
-# Maximum number of fused candidates that can be injected after KBRD top-30.
-_MAX_FUSED_CANDIDATES = 15
+_MAX_FUSED_CANDIDATES = _cfg["pipeline"]["max_fused_candidates"]
+_KBRD_TOP_PRESERVED   = _cfg["pipeline"]["kbrd_top_preserved"]
+_WEAK_SEED_THRESHOLD  = _cfg["pipeline"]["weak_seed_threshold"]
+_GENRE_BOOST_FACTOR   = _cfg["pipeline"]["genre_boost_factor"]
+_FUZZY_CUTOFF_ENTITY  = _cfg["extraction"]["fuzzy_cutoff_entity"]
+_FUZZY_CUTOFF_TITLE   = _cfg["extraction"]["fuzzy_cutoff_title"]
+_PERSON_MATCH_THRESH  = _cfg["extraction"]["person_match_threshold"]
+_SPACY_MODEL          = _cfg["extraction"]["spacy_model"]
+_N_QWEN_FUSION_TITLES = _cfg["extraction"]["n_qwen_fusion_titles"]
 
 
 def _seed_id_to_movie_candidate(seed_id: int, source_label: str) -> dict:
@@ -481,7 +501,7 @@ def _qwen_title_to_movie_candidate(title: str) -> dict:
     if mid is None:
         # Fuzzy fallback with a high cutoff to avoid false positives.
         matches = difflib.get_close_matches(
-            clean_t, _movie_title_to_id.keys(), n=1, cutoff=0.85
+            clean_t, _movie_title_to_id.keys(), n=1, cutoff=_FUZZY_CUTOFF_TITLE
         )
         if matches:
             mid = _movie_title_to_id[matches[0]]
@@ -545,7 +565,7 @@ def get_kbrd_candidates(
     seed_list, detected_decades, detected_phrases, filtered_1grams = prepare_input(dialogue)
 
     _seeds_before_fallback = len(seed_list)
-    _weak_seed_fallback = _seeds_before_fallback < 4
+    _weak_seed_fallback = _seeds_before_fallback < _WEAK_SEED_THRESHOLD
     _qwen_titles: list = []
 
     if _weak_seed_fallback:
@@ -553,7 +573,7 @@ def get_kbrd_candidates(
         try:
             prompt = (
                 "Based on this movie recommendation conversation, \n"
-                "name exactly 3 well-known movies that match what \n"
+                f"name exactly {_N_QWEN_FUSION_TITLES} well-known movies that match what \n"
                 "the user is looking for. Return only movie titles, \n"
                 "one per line, nothing else.\n"
                 "\n"
@@ -561,7 +581,7 @@ def get_kbrd_candidates(
                 f"{dialogue}"
             )
             content = call_qwen(prompt)
-            titles = [t.strip() for t in content.split('\n') if t.strip()]
+            titles = [t.strip() for t in content.split('\n') if t.strip()][:_N_QWEN_FUSION_TITLES]
             _qwen_titles = titles
             logger.debug(f"[KBRD Adapter] Qwen suggested seeds: {', '.join(titles)}")
             
@@ -574,7 +594,7 @@ def get_kbrd_candidates(
                         seed_list.append(mid)
                         added_count += 1
                 else:
-                    matches = difflib.get_close_matches(clean_t, _movie_title_to_id.keys(), n=1, cutoff=0.85)
+                    matches = difflib.get_close_matches(clean_t, _movie_title_to_id.keys(), n=1, cutoff=_FUZZY_CUTOFF_TITLE)
                     if matches:
                         mid = _movie_title_to_id[matches[0]]
                         if mid not in seed_list:
@@ -771,14 +791,14 @@ def get_kbrd_candidates(
         f" (total fused: {len(fused_candidates)})"
     )
 
-    # --- Assemble final list: KBRD top-30 + fused + KBRD tail ---
-    # KBRD top-30: preserved exactly, in original order.
-    kbrd_top30 = kbrd_candidates[:30]
+    # --- Assemble final list: KBRD top-preserved + fused + KBRD tail ---
+    # Top-K preserved candidates kept exactly in original KBRD order.
+    kbrd_top30 = kbrd_candidates[:_KBRD_TOP_PRESERVED]
 
-    # KBRD tail: candidates ranked 31+ that were NOT fused (by id).
+    # KBRD tail: candidates beyond kbrd_top_preserved that were NOT fused (by id).
     fused_ids = {c["id"] for c in fused_candidates}
     kbrd_tail = [
-        c for c in kbrd_candidates[30:]
+        c for c in kbrd_candidates[_KBRD_TOP_PRESERVED:]
         if c["id"] not in fused_ids
     ]
 
@@ -838,11 +858,11 @@ def _get_spacy_nlp():
     global _nlp
     if _nlp is None:
         try:
-            _nlp = spacy.load("en_core_web_sm")
+            _nlp = spacy.load(_SPACY_MODEL)
         except OSError:
             import subprocess
-            subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"])
-            _nlp = spacy.load("en_core_web_sm")
+            subprocess.run(["python", "-m", "spacy", "download", _SPACY_MODEL])
+            _nlp = spacy.load(_SPACY_MODEL)
     return _nlp
 
 def _is_valid_one_word_seed(phrase: str, doc) -> bool:
@@ -892,7 +912,7 @@ def prepare_input(dialogue: str) -> tuple:
 
     if _has_error or not _entity2id:
         logger.warning("[KBRD Adapter WARNING] Skipping input preparation due to prior errors.")
-        return [], [], []
+        return [], [], [], []
 
     # Step A: Preprocessing
     clean_dialogue = re.sub(r"[^\w\s]", "", dialogue.lower()).strip()
@@ -985,7 +1005,7 @@ def prepare_input(dialogue: str) -> tuple:
         if any(phrase in dp for dp in detected_phrases):
             continue
             
-        matches = difflib.get_close_matches(phrase, movie_titles, n=3, cutoff=0.92)
+        matches = difflib.get_close_matches(phrase, movie_titles, n=3, cutoff=_FUZZY_CUTOFF_ENTITY)
         if matches:
             matched_title = matches[0]
             mid = _movie_title_to_id[matched_title]
@@ -993,29 +1013,48 @@ def prepare_input(dialogue: str) -> tuple:
                 seed_set.add(mid)
                 detected_phrases.append(f"'{phrase}' -> '{matched_title}' (Fuzzy Movie Match)")
 
+    # Get last user turn text
+    last_turn_idx = dialogue.rfind("User: ")
+    if last_turn_idx != -1:
+        last_turn_text = dialogue[last_turn_idx:]
+    else:
+        last_turn_text = dialogue
+    last_turn_clean = re.sub(r"[^\w\s]", "", last_turn_text.lower()).strip()
+    last_turn_words = last_turn_clean.split()
+
     # Step E: Genre Detection
     genre_map = {
         "horror": "Horror_film",
         "comedy": "Comedy_film",
         "action": "Action_film",
         "animation": "Animated_film",
-        "sci fi": "Science_fiction_film",
-        "scifi": "Science_fiction_film",
+        "sci fi": "Science_fiction_films",
+        "scifi": "Science_fiction_films",
+        "sci-fi": "Science_fiction_films",
         "thriller": "Thriller_(genre)",
         "romance": "Romance_film",
         "documentary": "Documentary_film",
         "family": "Children's_film",
     }
 
-    # Match individual words against genre map
+    last_turn_genres = set()
+    for word in last_turn_words:
+        if word in genre_map:
+            last_turn_genres.add(word)
+    all_genres = set()
     for word in words:
         if word in genre_map:
-            genre_uri = f"<http://dbpedia.org/resource/{genre_map[word]}>"
-            if genre_uri in _entity2id:
-                eid = _entity2id[genre_uri]
-                if eid not in seed_set:
-                    seed_set.add(eid)
-                    detected_phrases.append(f"'{word}' (Genre Mapping)")
+            all_genres.add(word)
+            
+    active_genres = last_turn_genres if last_turn_genres else all_genres
+
+    for word in active_genres:
+        genre_uri = f"<http://dbpedia.org/resource/{genre_map[word]}>"
+        if genre_uri in _entity2id:
+            eid = _entity2id[genre_uri]
+            if eid not in seed_set:
+                seed_set.add(eid)
+                detected_phrases.append(f"'{word}' (Genre Mapping)")
 
     # ADD BLOCK 1 — Person detection (actors/directors)
     entity_map = {eid: _clean_title(uri) for eid, uri in _id2entity.items()}
@@ -1033,7 +1072,7 @@ def prepare_input(dialogue: str) -> tuple:
                     break
                 score = fuzz.ratio(person_name_lower,
                                   entity_lower)
-                if score > 85 and score > best_score:
+                if score > _PERSON_MATCH_THRESH and score > best_score:
                     best_score = score
                     best_match = entity_id
             if best_match is not None:
@@ -1068,14 +1107,22 @@ def prepare_input(dialogue: str) -> tuple:
     ]
 
     dialogue_lower = dialogue.lower()
+    last_turn_lower = last_turn_text.lower()
     detected_decades = []
+    last_turn_decades = []
     for pattern, decade in decade_patterns:
-        if re.search(pattern, dialogue_lower):
-            detected_decades.append(decade)
-            logger.info(
-                f"[KBRD Adapter] Temporal clue detected:"
-                f" {decade}"
-            )
+        if re.search(pattern, last_turn_lower):
+            last_turn_decades.append(decade)
+            
+    if last_turn_decades:
+        detected_decades = last_turn_decades
+        for d in detected_decades:
+            logger.info(f"[KBRD Adapter] Temporal clue detected in last turn: {d}")
+    else:
+        for pattern, decade in decade_patterns:
+            if re.search(pattern, dialogue_lower):
+                detected_decades.append(decade)
+                logger.info(f"[KBRD Adapter] Temporal clue detected: {decade}")
 
     # Store detected decades for use in reranking hint
     if detected_decades:
@@ -1087,6 +1134,14 @@ def prepare_input(dialogue: str) -> tuple:
 
     # Step F & G: Deduplication and Logging
     seed_list = list(seed_set)
+    
+    if last_turn_genres:
+        for word in last_turn_genres:
+            genre_uri = f"<http://dbpedia.org/resource/{genre_map[word]}>"
+            if genre_uri in _entity2id:
+                eid = _entity2id[genre_uri]
+                seed_list.extend([eid] * _GENRE_BOOST_FACTOR)
+                logger.info(f"[KBRD Adapter] Boosted '{word}' genre weight by {_GENRE_BOOST_FACTOR}x in seed list.")
     if not seed_list:
         logger.warning("[KBRD Adapter WARNING] No matching entities or movies found in dialogue.")
     else:

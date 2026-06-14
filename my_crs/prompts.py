@@ -1,5 +1,14 @@
-def truncate_history(history: str, 
-                     max_turns: int = 5) -> str:
+import os
+import yaml
+
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")) as _f:
+    _cfg = yaml.safe_load(_f)
+
+_MAX_HISTORY_TURNS = _cfg["pipeline"]["max_history_turns"]
+
+
+def truncate_history(history: str,
+                     max_turns: int = _MAX_HISTORY_TURNS) -> str:
     """
     Keep only the last max_turns lines of dialogue.
     Prevents prompt overflow for long conversations.
@@ -12,7 +21,7 @@ def truncate_history(history: str,
     return '\n'.join(truncated)
 
 
-def build_rerank_prompt(history: str, candidates: list[dict], era_hints: list = None, serialization_format: int = 1) -> str:
+def build_rerank_prompt(history: str, candidates: list[dict], era_hints: list = None, serialization_format: int = 1, previously_recommended: list = None) -> str:
     """
     Build the prompt for Qwen reranking.
     Each candidate should have:
@@ -23,7 +32,7 @@ def build_rerank_prompt(history: str, candidates: list[dict], era_hints: list = 
     - year (optional)
     - director (optional)
     """
-    history = truncate_history(history, max_turns=5)
+    history = truncate_history(history)
     candidate_lines = []
     for i, c in enumerate(candidates):
         title = c['title']
@@ -62,8 +71,12 @@ def build_rerank_prompt(history: str, candidates: list[dict], era_hints: list = 
                        f"{eras}. Strongly prefer candidates"
                        f" from this era.\n")
 
+    sys_content = "You are a movie recommendation reranker."
+    if previously_recommended:
+        sys_content += f" CRITICAL: Do not recommend any of the following movies as they have already been suggested this session: {previously_recommended}"
+
     messages = [
-        {"role": "system", "content": "You are a movie recommendation reranker."},
+        {"role": "system", "content": sys_content},
         {"role": "user", "content": f"""Select the single best movie from the candidate list based on the dialogue.
 Follow explicit user constraints strictly.
 Prefer candidates that match genre, year/era, and semantic clues from the conversation.
@@ -86,7 +99,7 @@ def build_response_prompt(history: str, selected_movie: dict, reason_hints: str 
     """
     Build the prompt for natural response generation.
     """
-    history = truncate_history(history, max_turns=5)
+    history = truncate_history(history)
     if reason_hints is None:
         lines = history.split('\n')
         last_user_msg = ""

@@ -1,6 +1,7 @@
 import sys
 import os
 import logging
+import yaml
 
 logging.basicConfig(
     level=logging.INFO,
@@ -10,6 +11,9 @@ logger = logging.getLogger(__name__)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(_PROJECT_ROOT, "baseline_repo", "KBRD_project", "KBRD"))
+
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")) as _f:
+    _cfg = yaml.safe_load(_f)
 
 from kbrd_adapter import get_kbrd_candidates
 from reranker import rerank
@@ -47,7 +51,7 @@ def get_recommendation(dialogue_history: list) -> dict:
     dialogue_str = "\n".join(turns)
     
     # Stage 1: Get candidates from KBRD
-    candidates, detected_decades = get_kbrd_candidates(dialogue_str, top_k=50)
+    candidates, detected_decades = get_kbrd_candidates(dialogue_str, top_k=_cfg["pipeline"]["top_k_candidates"])
     
     # Stage 2: Rerank with Qwen
     selected_movie, _ = rerank(dialogue_str, candidates, era_hints=detected_decades)

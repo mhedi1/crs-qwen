@@ -1,11 +1,3 @@
-# Paths (relative to project root)
-paths:
-  kbrd_repo: "baseline_repo/KBRD_project/KBRD"
-  data: "baseline_repo/KBRD_project/KBRD/data/redial"
-  model: "baseline_repo/KBRD_project/KBRD/saved/kbrd_model"
-  test_data: "baseline_repo/KBRD_project/KBRD/data/redial/test_data.jsonl"
-  embeddings: "my_crs/movie_embeddings.pkl"
-
 # Qwen server
 qwen:
   server_url: "http://sinbad2ia.ujaen.es:8050/api/chat"
@@ -13,24 +5,42 @@ qwen:
   timeout: 60
   max_retries: 3
   think: false
+  temperature: 0
+  stream: false
+  intent_timeout: 10
 
 # Pipeline settings
 pipeline:
   top_k_candidates: 50
-  fallback_threshold: 4
+  max_fused_candidates: 15
+  kbrd_top_preserved: 30
+  weak_seed_threshold: 4
+  genre_boost_factor: 15
+  max_history_turns: 5
+  serialisation_format: 1
+
+# Entity extraction settings
+extraction:
+  fuzzy_cutoff_entity: 0.92
+  fuzzy_cutoff_title: 0.85
+  person_match_threshold: 85
+  spacy_model: "en_core_web_sm"
+  n_qwen_fusion_titles: 3
+
+# TMDB API settings
+tmdb:
+  timeout: 2
 
 # Evaluation settings
 evaluation:
-  max_samples: 200
   k_values: [1, 10, 50]
+
+# MLflow settings
+mlflow:
+  experiment_name: "crs-thesis"
 
 # Web app settings
 webapp:
   host: "0.0.0.0"
   port: 5000
   debug: false
-
-# Logging
-logging:
-  level: "INFO"
-  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

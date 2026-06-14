@@ -198,7 +198,7 @@ def evaluate(args):
     """
     mlflow_db_path = os.path.join(_PROJECT_ROOT, "experiments", f"mlflow_format{args.format}.db")
     mlflow.set_tracking_uri(f"sqlite:///{mlflow_db_path}")
-    mlflow.set_experiment("crs-thesis")
+    mlflow.set_experiment(_cfg["mlflow"]["experiment_name"])
     mlflow_run = mlflow.start_run()
     mlflow.log_params({
         "format": args.format,
@@ -629,7 +629,7 @@ def evaluate(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate CRS Pipeline")
-    parser.add_argument("--format", type=int, choices=[1, 2, 3, 4], default=1,
+    parser.add_argument("--format", type=int, choices=[1, 2, 3, 4], default=_cfg["pipeline"]["serialisation_format"],
                         help="Serialization format (1-4)")
     parser.add_argument("--dataset", type=str, choices=['redial', 'inspired'], default='redial',
                         help="Dataset choice (redial or inspired)")

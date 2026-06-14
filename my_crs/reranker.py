@@ -15,6 +15,8 @@ MODEL_NAME = _cfg["qwen"]["model"]
 _TIMEOUT = _cfg["qwen"]["timeout"]
 _MAX_RETRIES = _cfg["qwen"]["max_retries"]
 _THINK = _cfg["qwen"]["think"]
+_TEMPERATURE = _cfg["qwen"]["temperature"]
+_STREAM = _cfg["qwen"]["stream"]
 USE_FAKE_MODE = False
 
 
@@ -58,9 +60,9 @@ def call_qwen(messages) -> str:
                 json={
                     "model": MODEL_NAME,
                     "messages": payload_messages,
-                    "stream": False,
+                    "stream": _STREAM,
                     "think": _THINK,
-                    "temperature": 0,
+                    "temperature": _TEMPERATURE,
                 },
                 timeout=_TIMEOUT
             )
@@ -75,7 +77,7 @@ def call_qwen(messages) -> str:
                 raise
 
 
-def rerank(history: str, candidates: list[dict], era_hints: list = None, serialization_format: int = 1) -> tuple[dict, bool]:
+def rerank(history: str, candidates: list[dict], era_hints: list = None, serialization_format: int = 1, previously_recommended: list = None) -> tuple[dict, bool]:
     """Select the best candidate movie using Qwen as a reranker.
 
     Args:
@@ -88,7 +90,7 @@ def rerank(history: str, candidates: list[dict], era_hints: list = None, seriali
         Tuple of (selected_movie_dict, is_fallback). is_fallback is True when
         Qwen fails or returns an unparseable answer.
     """
-    prompt = build_rerank_prompt(history, candidates, era_hints=era_hints, serialization_format=serialization_format)
+    prompt = build_rerank_prompt(history, candidates, era_hints=era_hints, serialization_format=serialization_format, previously_recommended=previously_recommended)
     
     try:
         raw_output = call_qwen(prompt)
