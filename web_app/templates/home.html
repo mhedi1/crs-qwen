@@ -11,49 +11,48 @@
 <body class="home-body d-flex align-items-center justify-content-center min-vh-100">
   <div class="text-center home-card p-5">
     <div class="mb-4">
-      <span class="badge bg-secondary px-3 py-2 mb-3 small">Thesis Demo</span>
+      <div class="mb-3">
+        <span class="academic-badge">FINAL YEAR THESIS PROTOTYPE</span>
+      </div>
       <h1 class="display-5 fw-bold text-white mb-3">
-        Conversational Movie Recommender System
+        CRS-Qwen: A Two-Stage Conversational Recommender
       </h1>
-      <p class="lead home-subtitle mb-2">
-        Powered by KBRD retrieval + Qwen reranking + Qwen response generation
-      </p>
-      <p class="text-secondary">
-        Engage in a natural conversation to receive personalised film recommendations
-        driven by a hybrid neural knowledge-graph pipeline.
+      <p class="lead home-subtitle mb-4">
+        Knowledge-grounded neural retrieval paired with LLM semantic reranking.
       </p>
     </div>
-    <div class="row justify-content-center align-items-stretch g-3 mb-5 text-start">
-      <div class="col-md-3">
-        <div class="feature-card p-2">
-          <i class="bi bi-diagram-3 feature-icon mb-2 d-block"></i>
-          <div class="small feature-stage-label mb-1">Stage 1 — KBRD Retrieval</div>
-          <div class="text-white small mb-1">Knowledge-graph neural retrieval over 50,000+ movies</div>
-          <div class="feature-detail">Returns top-50 candidate films</div>
+    <div class="row feature-row justify-content-center align-items-stretch g-3 mb-4 text-start">
+      <div class="col-md-4">
+        <div class="feature-card academic-card p-3">
+          <div class="academic-step-indicator mb-2">[01] KBRD Neural Retrieval</div>
+          <div class="text-white small">Graph attention network traversing 50,000+ movie nodes to extract top-50 candidates.</div>
         </div>
       </div>
-      <div class="col-md-3">
-        <div class="feature-card p-2">
-          <i class="bi bi-sort-down feature-icon mb-2 d-block"></i>
-          <div class="small feature-stage-label mb-1">Stage 2 — Qwen Reranking</div>
-          <div class="text-white small mb-1">LLM semantic reranking using dialogue context</div>
-          <div class="feature-detail">Selects best match from top-50 candidates</div>
+      <div class="col-md-4">
+        <div class="feature-card academic-card p-3">
+          <div class="academic-step-indicator mb-2">[02] LLM Semantic Reranking</div>
+          <div class="text-white small">Context-aware filtering driven by dialogue history and entity constraints.</div>
         </div>
       </div>
-      <div class="col-md-3">
-        <div class="feature-card p-2">
-          <i class="bi bi-chat-text feature-icon mb-2 d-block"></i>
-          <div class="small feature-stage-label mb-1">Stage 3 — Response Generation</div>
-          <div class="text-white small mb-1">Natural language response generation</div>
-          <div class="feature-detail">Powered by Qwen3.5:35B zero-shot</div>
+      <div class="col-md-4">
+        <div class="feature-card academic-card p-3">
+          <div class="academic-step-indicator mb-2">[03] Qwen Zero-Shot Gen</div>
+          <div class="text-white small">Powered by Qwen LLM for natural, engaging, and accurate conversational responses.</div>
         </div>
       </div>
     </div>
-    <a href="/chat" class="btn btn-primary btn-lg px-5 py-3 start-btn">
+    
+    <div class="dataset-evaluation mb-5">
+      System Evaluated on the ReDial Dataset (10,006 dialogues) and INSPIRED (1,001 dialogues).
+    </div>
+
+    <a href="/chat" class="btn btn-primary start-btn-academic">
       Start Conversation
     </a>
-    <div class="mt-5 text-center" style="font-size: 0.75rem; color: #718096;">
-      Developed by Med Hedi Fourati — Final-Year Thesis | Pristini School of AI & Universidad de Jaén
+
+    <div class="mt-5 academic-footer">
+      Developed by Med Hedi Foughali | Final Year Thesis (2025/2026)<br>
+      Pristini School of AI &amp; Universidad de Jaén
     </div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>

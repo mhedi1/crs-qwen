@@ -68,12 +68,12 @@
           <span class="sidebar-value" id="profile-turn">0</span>
         </div>
         <div class="sidebar-row">
-          <span class="sidebar-label">Seeds extracted:</span>
+          <span class="sidebar-label">Entity seeds:</span>
           <span class="sidebar-value" id="profile-seeds">0</span>
         </div>
         <div class="sidebar-row">
-          <span class="sidebar-label">Fallback:</span>
-          <span class="sidebar-value fallback-no" id="profile-fallback">NO</span>
+          <span class="sidebar-label">Seed source:</span>
+          <span class="sidebar-value fallback-no" id="profile-fallback">Dialogue</span>
         </div>
       </div>
       
@@ -121,11 +121,12 @@
     }
 
     function appendUserMessage(text) {
+      const displayText = text.charAt(0).toUpperCase() + text.slice(1);
       const div = document.createElement("div");
       div.className = "d-flex justify-content-end mb-3";
       div.innerHTML = `
         <div class="bubble bubble-user">
-          <div class="bubble-text">${escapeHtml(text)}</div>
+          <div class="bubble-text">${escapeHtml(displayText)}</div>
         </div>
       `;
       messageList.appendChild(div);
@@ -147,11 +148,11 @@
         const metaRow = (genreBadge || decadeBadge)
           ? `<div class="movie-meta">${genreBadge}${decadeBadge}</div>` : "";
         const posterHtml = movie.poster_url
-          ? `<img src="${escapeHtml(movie.poster_url)}" class="movie-poster" alt="Movie poster">`
+          ? `<img src="${escapeHtml(movie.poster_url)}" class="movie-poster" alt="Movie poster" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="poster-fallback" style="display:none">POSTER<br>UNAVAILABLE</div>`
           : "";
         movieHtml = `
           <div class="movie-card mt-2">
-            <span class="movie-badge">&#127916; Recommended</span>
+            <span class="movie-badge">Recommended</span>
             <div class="movie-card-body">
               ${posterHtml}
               <div class="movie-card-info">
@@ -175,8 +176,12 @@
         `;
       } else {
         // Candidate chips HTML
+        const isFallback = data.profile && data.profile.fallback_used;
         let candidatesHtml = "";
         if (candidates && candidates.length > 0) {
+          const fallbackNote = isFallback
+            ? `<p class="seed-source-note mb-2">Seed source: Qwen-assisted (insufficient dialogue context for direct extraction)</p>`
+            : "";
           const chips = candidates.map((c, idx) => {
             const genre  = (!c.genre  || c.genre.toLowerCase()  === "unknown") ? "—" : c.genre;
             const decade = (!c.decade || c.decade.toLowerCase() === "unknown") ? "—" : c.decade;
@@ -187,12 +192,14 @@
             const chipClass = isSelected
               ? "candidate-chip chip-selected"
               : (c.source === "KBRD_NEURAL" ? "candidate-chip chip-kbrd" : "candidate-chip chip-seed");
-            const prefix = isSelected ? "⭐ " : "";
+            const prefix = isSelected ? "[+] " : "";
             return `<span class="${chipClass}" data-tooltip="${escapeHtml(tooltip)}">${prefix}${idx + 1} ${escapeHtml(c.title || "—")}</span>`;
           }).join("");
           candidatesHtml = `
             <div class="pipeline-header mb-2">Retrieved Candidates</div>
+            ${fallbackNote}
             <div class="candidate-chips">${chips}</div>
+            <div class="candidates-count-note">Showing top 5 of 50 retrieved candidates</div>
           `;
         } else {
           candidatesHtml = `<p class="text-secondary small mb-0">Pipeline details not available.</p>`;
@@ -212,7 +219,7 @@
           }
           qwenSelectedHtml = `
             <div class="qwen-selected-row mt-3">
-              <span class="qwen-selected-label">Qwen Selected:</span>
+              <span class="qwen-selected-label">Qwen selected:</span>
               <span class="qwen-selected-title">${escapeHtml(selected_candidate.title)}</span>
               <span class="qwen-selected-rank">${rankNote}</span>
             </div>
@@ -296,15 +303,15 @@
           el.classList.add("flash");
           
           if (isFallback) {
-            el.className = "sidebar-value flash " + (newValue === "YES" ? "fallback-yes" : "fallback-no");
+            el.className = "sidebar-value flash " + (newValue === "Qwen-assisted" ? "fallback-yes" : "fallback-no");
           }
         }
       }
-      
+
       flashAndUpdate("profile-turn", String(profile.turn));
       flashAndUpdate("profile-seeds", String(profile.seed_count));
-      
-      const fbStr = profile.fallback_used ? "YES" : "NO";
+
+      const fbStr = profile.fallback_used ? "Qwen-assisted" : "Dialogue";
       flashAndUpdate("profile-fallback", fbStr, true);
       
       const genresStr = profile.genres.length > 0 ? profile.genres.join(", ") : "—";
@@ -346,10 +353,10 @@
 
       const div = document.createElement("div");
       div.id = "thinking";
-      div.className = "d-flex justify-content-start mb-3";
+      div.className = "d-flex justify-content-start mb-4";
       div.innerHTML = `
         <div class="bubble bubble-system pipeline-loading">
-          <div class="pipeline-stage-text">🤔 Analysing your message...</div>
+          <div class="pipeline-stage-text">Analyzing intent...</div>
           <div class="pipeline-progress-bar">
             <div class="pipeline-progress-fill"></div>
           </div>
@@ -363,9 +370,9 @@
         div: div,
         startCycling: function() {
           const stages = [
-            "🔍 Retrieving candidates from KBRD...",
-            "⚡ Reranking with Qwen...",
-            "💬 Generating response..."
+            "Retrieving candidates via KBRD Knowledge Graph...",
+            "Reranking candidates with Qwen LLM...",
+            "Generating response..."
           ];
           const stageEl = div.querySelector(".pipeline-stage-text");
           stageEl.textContent = stages[0];
@@ -447,7 +454,7 @@
 
         // Adjust animation based on intent
         if (intent === "FOLLOW_UP") {
-          thinkingCtrl.setStatic("💬 Generating response...");
+          thinkingCtrl.setStatic("Generating response...");
         } else {
           thinkingCtrl.startCycling();
         }
@@ -495,11 +502,38 @@
     clearBtn.addEventListener("click", async () => {
       await fetch("/api/clear", { method: "POST" });
       chatHistory = [];
+
+      // Reset chat bubbles and restore starters
       messageList.innerHTML = `
-        <div class="system-welcome text-center text-secondary py-4 small">
-          Conversation cleared. Start fresh below.
+        <div id="welcomeHint" class="system-welcome text-center text-secondary py-4 small">
+          Start the conversation — describe the kind of film you are in the mood for.
+        </div>
+        <div id="starterButtons" class="starter-grid">
+          <button class="starter-btn">I love horror movies from the 80s</button>
+          <button class="starter-btn">Recommend something like The Godfather</button>
+          <button class="starter-btn">I want a funny comedy for tonight</button>
+          <button class="starter-btn">Something with great action and sci-fi</button>
         </div>
       `;
+      document.querySelectorAll(".starter-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          userInput.value = btn.textContent.trim();
+          sendMessage();
+        });
+      });
+
+      // Reset sidebar to all dashes immediately
+      document.getElementById("profile-turn").innerText    = "—";
+      document.getElementById("profile-seeds").innerText   = "—";
+
+      const fb = document.getElementById("profile-fallback");
+      fb.innerText  = "—";
+      fb.className  = "sidebar-value";
+
+      document.getElementById("profile-genres").innerText  = "—";
+      document.getElementById("profile-decades").innerText = "—";
+      document.getElementById("profile-movies").innerHTML  =
+        '<span class="text-secondary small">—</span>';
     });
   </script>
 </body>
