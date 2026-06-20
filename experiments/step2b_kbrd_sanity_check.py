@@ -2,6 +2,9 @@ import os
 import json
 import yaml
 import sys
+from dotenv import load_dotenv
+
+load_dotenv()
 
 _EXPERIMENTS_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(_EXPERIMENTS_DIR)
