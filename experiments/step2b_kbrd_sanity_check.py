@@ -16,22 +16,8 @@ from evaluate import build_dialogue_up_to
 from kbrd_adapter import get_kbrd_candidates
 
 def sanity_check():
-    # 1. Load config and confirm model path
-    with open(os.path.join(_MY_CRS_DIR, "config.yaml")) as _f:
-        _cfg = yaml.safe_load(_f)
-        
-    model_path = _cfg["kbrd"]["model_path"]
-    full_model_path = os.path.join(_PROJECT_ROOT, model_path)
-    
     print("=== STEP 2b: KBRD INFERENCE SANITY CHECK ===")
-    print(f"KBRD Model Path from config: {model_path}")
-    print(f"Absolute Path: {full_model_path}")
     
-    if not os.path.exists(full_model_path):
-        print(f"[WARNING] Expected KBRD model directory does NOT exist at {full_model_path}")
-    else:
-        print("[OK] KBRD model path verified.\n")
-        
     test_file = os.path.join(_PROJECT_ROOT, "baseline_repo", "KBRD_project", "KBRD", "data", "redial", "test_data.jsonl")
     
     conversations_to_check = 2
