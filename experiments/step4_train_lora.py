@@ -95,7 +95,29 @@ def train():
     # 7. Initialize Trainer
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
     
-    trainer = Trainer(
+    class DebugTrainer(Trainer):
+        def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+            labels = inputs.get("labels")
+            if labels is not None:
+                print(f"DEBUG: labels min={labels.min().item()}, max={labels.max().item()}, shape={labels.shape}")
+                # Count negative labels other than -100
+                bad_negatives = ((labels < 0) & (labels != -100)).sum().item()
+                if bad_negatives > 0:
+                    print(f"DEBUG: Found {bad_negatives} negative labels that are not -100!")
+            
+            # Run forward pass to get logits
+            outputs = model(**inputs)
+            logits = outputs.get("logits")
+            if logits is not None:
+                print(f"DEBUG: logits shape={logits.shape}")
+            
+            # Return standard loss computation
+            inputs["labels"] = labels
+            if num_items_in_batch is None:
+                return super().compute_loss(model, inputs, return_outputs)
+            return super().compute_loss(model, inputs, return_outputs, num_items_in_batch)
+
+    trainer = DebugTrainer(
         model=model,
         train_dataset=dataset,
         args=training_args,
