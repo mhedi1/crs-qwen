@@ -78,7 +78,6 @@ def train():
     training_args = SFTConfig(
         output_dir=OUTPUT_DIR,
         dataset_text_field="text",
-        max_seq_length=1500,
         per_device_train_batch_size=2,
         gradient_accumulation_steps=4, # Effective batch size = 8
         optim="paged_adamw_32bit",
