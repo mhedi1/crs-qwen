@@ -5,10 +5,11 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     BitsAndBytesConfig,
-    TrainingArguments
+    TrainingArguments,
+    Trainer,
+    DataCollatorForLanguageModeling
 )
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-from trl import SFTTrainer, SFTConfig
 
 _EXPERIMENTS_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_ID = "Qwen/Qwen2.5-7B-Instruct"
@@ -30,16 +31,15 @@ def train():
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
         
-    # 3. Format Dataset with Chat Template
-    print("Applying chat template to dataset...")
-    def format_chat_template(example):
-        # apply_chat_template automatically handles formatting the System, User, and Assistant roles
-        text = tokenizer.apply_chat_template(example["messages"], tokenize=False)
-        return {"text": text}
+    # 3. Format Dataset with Chat Template and Tokenize
+    print("Applying chat template and tokenizing dataset...")
+    def format_and_tokenize(examples):
+        # We process batched examples
+        texts = [tokenizer.apply_chat_template(msg, tokenize=False) for msg in examples["messages"]]
+        return tokenizer(texts, truncation=True, max_length=1500)
         
-    dataset = raw_dataset.map(format_chat_template)
+    dataset = raw_dataset.map(format_and_tokenize, batched=True, remove_columns=raw_dataset.column_names)
     
-    # 4. Load Model in 4-bit
     print("\nLoading base model in 4-bit quantization...")
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
@@ -72,10 +72,12 @@ def train():
         task_type="CAUSAL_LM"
     )
     
-    # 6. Training Arguments (Using new SFTConfig for latest trl versions)
-    training_args = SFTConfig(
+    model = get_peft_model(model, lora_config)
+    model.print_trainable_parameters()
+    
+    # 6. Training Arguments
+    training_args = TrainingArguments(
         output_dir=OUTPUT_DIR,
-        dataset_text_field="text",
         per_device_train_batch_size=2,
         gradient_accumulation_steps=4, # Effective batch size = 8
         optim="paged_adamw_32bit",
@@ -83,20 +85,21 @@ def train():
         logging_steps=10,
         learning_rate=2e-4,
         max_grad_norm=0.3,
-        num_train_epochs=1, # 1 epoch over 2000 examples is perfect for LoRA adaptation
+        num_train_epochs=1, 
         warmup_ratio=0.03,
         lr_scheduler_type="cosine",
-        bf16=True, # Use bfloat16 for stability
-        report_to="none" # Disable wandb/mlflow for this isolated run
+        bf16=True, 
+        report_to="none" 
     )
     
     # 7. Initialize Trainer
-    trainer = SFTTrainer(
+    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+    
+    trainer = Trainer(
         model=model,
         train_dataset=dataset,
-        processing_class=tokenizer,
         args=training_args,
-        peft_config=lora_config
+        data_collator=data_collator
     )
     
     print("\nStarting Training...")
