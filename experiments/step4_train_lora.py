@@ -96,7 +96,7 @@ def train():
     trainer = SFTTrainer(
         model=model,
         train_dataset=dataset,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         args=training_args,
         peft_config=lora_config
     )
