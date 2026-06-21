@@ -71,9 +71,6 @@ def train():
         task_type="CAUSAL_LM"
     )
     
-    model = get_peft_model(model, lora_config)
-    model.print_trainable_parameters()
-    
     # 6. Training Arguments (Using new SFTConfig for latest trl versions)
     training_args = SFTConfig(
         output_dir=OUTPUT_DIR,
