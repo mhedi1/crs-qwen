@@ -8,7 +8,7 @@ from transformers import (
     TrainingArguments
 )
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-from trl import SFTTrainer
+from trl import SFTTrainer, SFTConfig
 
 _EXPERIMENTS_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_ID = "Qwen/Qwen2.5-7B-Instruct"
@@ -74,9 +74,11 @@ def train():
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
     
-    # 6. Training Arguments
-    training_args = TrainingArguments(
+    # 6. Training Arguments (Using new SFTConfig for latest trl versions)
+    training_args = SFTConfig(
         output_dir=OUTPUT_DIR,
+        dataset_text_field="text",
+        max_seq_length=1500,
         per_device_train_batch_size=2,
         gradient_accumulation_steps=4, # Effective batch size = 8
         optim="paged_adamw_32bit",
@@ -95,8 +97,6 @@ def train():
     trainer = SFTTrainer(
         model=model,
         train_dataset=dataset,
-        dataset_text_field="text",
-        max_seq_length=1500, # Safely fits our truncated history + 50 candidates
         tokenizer=tokenizer,
         args=training_args,
         peft_config=lora_config
