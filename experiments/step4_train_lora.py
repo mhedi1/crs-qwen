@@ -51,8 +51,8 @@ def train():
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_ID,
         quantization_config=bnb_config,
-        # Force model entirely onto GPU 1 because Ollama is taking up 16GB on GPU 0
-        device_map={"": 1}, 
+        # Using auto now that the VRAM will be cleared
+        device_map="auto", 
         trust_remote_code=True
     )
     
