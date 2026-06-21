@@ -58,6 +58,7 @@ def train():
     
     # Prepare model for QLoRA
     model = prepare_model_for_kbit_training(model)
+    print(f"Model lm_head shape: {model.get_output_embeddings().weight.shape}")
     
     # 5. Configure LoRA Adapter
     print("\nConfiguring LoRA Adapter...")
