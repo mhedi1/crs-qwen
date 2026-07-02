@@ -1,0 +1,15 @@
+{
+    "dataset": "redial",
+    "format": 2,
+    "recommendation_only": false,
+    "skip_reranker": false,
+    "disable_fusion": false,
+    "conversations": 0,
+    "instances": 0,
+    "skipped_conversations": 0,
+    "skipped_instances": 3898,
+    "reranker_fallbacks": 0,
+    "recommendation": {},
+    "conversation": {},
+    "mlflow_run_id": "ade414d30add43ca8f04724a9b9a84c5"
+}

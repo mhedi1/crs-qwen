@@ -1,0 +1,44 @@
+{
+    "dataset": "redial",
+    "format": 2,
+    "recommendation_only": false,
+    "skip_reranker": false,
+    "disable_fusion": false,
+    "conversations": 200,
+    "instances": 640,
+    "skipped_conversations": 0,
+    "skipped_instances": 0,
+    "reranker_fallbacks": 0,
+    "recommendation": {
+        "Recall@1": 0.0265625,
+        "Precision@1": 0.0265625,
+        "NDCG@1": 0.0265625,
+        "Recall@10": 0.1015625,
+        "Precision@10": 0.01031249999999999,
+        "NDCG@10": 0.05352009670103961,
+        "Recall@50": 0.2484375,
+        "Precision@50": 0.005406250000000004,
+        "NDCG@50": 0.08493639609196474,
+        "MRR": 0.051764266672890635,
+        "Reranker@1": 0.0296875,
+        "AvgGoldRank": 17.9937106918239,
+        "MedianGoldRank": 14
+    },
+    "conversation": {
+        "Distinct-2": 0.2914919755854995,
+        "Distinct-3": 0.5505025572164847,
+        "Distinct-4": 0.7238455230895382,
+        "BLEU": 0.004940631674988599,
+        "ROUGE-1": 0.07586423798550271,
+        "ROUGE-2": 0.0071072302955165175,
+        "ROUGE-L": 0.06106141809788005,
+        "Avg_Length": 81.140625
+    },
+    "conversation_level": {
+        "conversations_evaluated": 200,
+        "ConvSuccess@1": 0.09,
+        "ConvRecall@10": 0.24,
+        "ConvRecall@50": 0.525
+    },
+    "mlflow_run_id": "360ff43a36a74aa2af666bbbf9a9572a"
+}
