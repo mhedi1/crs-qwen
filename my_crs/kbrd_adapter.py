@@ -562,7 +562,10 @@ def get_kbrd_candidates(
             })
         return get_fallback_candidates(top_k), []
 
-    seed_list, detected_decades, detected_phrases, filtered_1grams = prepare_input(dialogue)
+    if _cfg["extraction"].get("use_improved_extraction", False):
+        seed_list, detected_decades, detected_phrases, filtered_1grams = prepare_input_v2(dialogue)
+    else:
+        seed_list, detected_decades, detected_phrases, filtered_1grams = prepare_input(dialogue)
 
     _seeds_before_fallback = len(seed_list)
     _weak_seed_fallback = _seeds_before_fallback < _WEAK_SEED_THRESHOLD
@@ -1152,4 +1155,77 @@ def prepare_input(dialogue: str) -> tuple:
         if filtered_1grams:
             logger.debug(f"[KBRD Adapter] Filtered noisy 1-grams: {filtered_1grams}")
 
+    return seed_list, detected_decades, detected_phrases, filtered_1grams
+
+
+def prepare_input_v2(dialogue: str) -> tuple:
+    """
+    Improved entity extraction using DBpedia Spotlight.
+    """
+    logger.info("[KBRD Adapter] -> STAGE 2 (V2): Preparing input with DBpedia Spotlight...")
+    _load_kbrd_resources()
+
+    if _has_error or not _entity2id:
+        return [], [], [], []
+
+    seed_set = set()
+    detected_phrases = []
+    
+    try:
+        import spacy
+        # We need a spacy model with Spotlight
+        nlp = spacy.load("en_core_web_sm")
+        # Add the spotlight component
+        # We assume local server is running on localhost:2222
+        nlp.add_pipe('dbpedia_spotlight', config={'dbpedia_rest_endpoint': 'http://localhost:2222/rest'})
+        
+        doc = nlp(dialogue)
+        for ent in doc.ents:
+            # Spotlight gives us ent.kb_id_ which is the DBpedia URI, e.g., "http://dbpedia.org/resource/The_Matrix"
+            if ent.kb_id_:
+                uri = f"<{ent.kb_id_}>"
+                if uri in _entity2id:
+                    eid = _entity2id[uri]
+                    if eid not in seed_set:
+                        seed_set.add(eid)
+                        detected_phrases.append(f"'{ent.text}' -> '{uri}' (Spotlight Exact Match)")
+    except Exception as e:
+        logger.error(f"[KBRD Adapter] DBpedia Spotlight failed: {e}. Falling back to prepare_input.")
+        return prepare_input(dialogue)
+        
+    # We still need to detect decades like in the old one
+    decade_patterns = [
+        (r'\b(192\d)s?\b', '1920s'), (r'\b(193\d)s?\b', '1930s'), (r'\b(194\d)s?\b', '1940s'),
+        (r'\b(195\d)s?\b', '1950s'), (r'\b(196\d)s?\b', '1960s'), (r'\b(197\d)s?\b', '1970s'),
+        (r'\b(198\d)s?\b', '1980s'), (r'\b(199\d)s?\b', '1990s'), (r'\b(200\d)s?\b', '2000s'),
+        (r'\b(201\d)s?\b', '2010s'), (r'\b20s\b|twenties', '1920s'), (r'\b30s\b|thirties', '1930s'),
+        (r'\b40s\b|forties', '1940s'), (r'\b50s\b|fifties', '1950s'), (r'\b60s\b|sixties', '1960s'),
+        (r'\b70s\b|seventies', '1970s'), (r'\b80s\b|eighties', '1980s'), (r'\b90s\b|nineties', '1990s'),
+    ]
+    
+    dialogue_lower = dialogue.lower()
+    last_turn_idx = dialogue.rfind("User: ")
+    if last_turn_idx != -1:
+        last_turn_text = dialogue[last_turn_idx:]
+    else:
+        last_turn_text = dialogue
+    last_turn_lower = last_turn_text.lower()
+    
+    detected_decades = []
+    last_turn_decades = []
+    for pattern, decade in decade_patterns:
+        if re.search(pattern, last_turn_lower):
+            last_turn_decades.append(decade)
+            
+    if last_turn_decades:
+        detected_decades = last_turn_decades
+    else:
+        for pattern, decade in decade_patterns:
+            if re.search(pattern, dialogue_lower):
+                detected_decades.append(decade)
+                
+    seed_list = list(seed_set)
+    filtered_1grams = []  # Not used in Spotlight approach, just keeping signature
+    
+    logger.info(f"[KBRD Adapter] Spotlight found {len(seed_list)} seeds.")
     return seed_list, detected_decades, detected_phrases, filtered_1grams

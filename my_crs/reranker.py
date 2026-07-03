@@ -98,7 +98,7 @@ def rerank(history: str, candidates: list[dict], era_hints: list = None, seriali
         logger.warning("[Reranker] Qwen call failed after retries. Using fallback.")
         return (candidates[0] if candidates else {"title": "Unknown", "genre": "Unknown", "decade": "Unknown"}, True)
 
-    answer_idx = parse_answer_id(raw_output)
+    answer_idx = parse_answer_id(raw_output, max_val=len(candidates))
 
     if answer_idx is None:
         logger.warning("[Reranker] Could not parse answer. Using fallback.")

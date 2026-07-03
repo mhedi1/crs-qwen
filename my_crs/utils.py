@@ -3,14 +3,15 @@ import re
 from pathlib import Path
 
 
-def parse_answer_id(text: str) -> int | None:
+def parse_answer_id(text: str, max_val: int = 50) -> int | None:
     """
     Extract an answer like: ANSWER: 3
-    Returns the integer id if found, otherwise None.
+    Returns the first integer id in the range [1, max_val] if found, otherwise None.
     """
-    match = re.search(r"ANSWER:\s*(\d+)", text)
-    if match:
-        return int(match.group(1))
+    for match in re.finditer(r"ANSWER:\s*(\d+)", text):
+        val = int(match.group(1))
+        if 1 <= val <= max_val:
+            return val
     return None
 
 
