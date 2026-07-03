@@ -1,0 +1,44 @@
+{
+    "dataset": "inspired",
+    "format": 1,
+    "recommendation_only": false,
+    "skip_reranker": false,
+    "disable_fusion": false,
+    "conversations": 88,
+    "instances": 263,
+    "skipped_conversations": 0,
+    "skipped_instances": 0,
+    "reranker_fallbacks": 0,
+    "recommendation": {
+        "Recall@1": 0.0038022813688212928,
+        "Precision@1": 0.0038022813688212928,
+        "NDCG@1": 0.0038022813688212928,
+        "Recall@10": 0.08365019011406843,
+        "Precision@10": 0.008365019011406847,
+        "NDCG@10": 0.037728236509450536,
+        "Recall@50": 0.19771863117870722,
+        "Precision@50": 0.003954372623574147,
+        "NDCG@50": 0.06038858835148713,
+        "MRR": 0.028674827165407868,
+        "Reranker@1": 0.04182509505703422,
+        "AvgGoldRank": 19.596153846153847,
+        "MedianGoldRank": 19.5
+    },
+    "conversation": {
+        "Distinct-2": 0.43112895606991025,
+        "Distinct-3": 0.6930214760606496,
+        "Distinct-4": 0.8341891106374734,
+        "BLEU": 0.005098512605513768,
+        "ROUGE-1": 0.08610986202575924,
+        "ROUGE-2": 0.01050510814525871,
+        "ROUGE-L": 0.06667085765950033,
+        "Avg_Length": 81.50190114068441
+    },
+    "conversation_level": {
+        "conversations_evaluated": 88,
+        "ConvSuccess@1": 0.11363636363636363,
+        "ConvRecall@10": 0.19318181818181818,
+        "ConvRecall@50": 0.4090909090909091
+    },
+    "mlflow_run_id": "12d2a0a0ecce4660a6d994e66aee4af5"
+}
