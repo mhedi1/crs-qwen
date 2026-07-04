@@ -198,7 +198,12 @@ def evaluate(args):
     """
     mlflow_db_path = os.path.join(_PROJECT_ROOT, "experiments", f"mlflow_format{args.format}.db")
     mlflow.set_tracking_uri(f"sqlite:///{mlflow_db_path}")
-    mlflow.set_experiment(_cfg["mlflow"]["experiment_name"])
+    
+    experiment_name = _cfg["mlflow"]["experiment_name"]
+    if _cfg["extraction"].get("use_improved_extraction", False):
+        experiment_name = "crs-thesis-entity-experiment"
+        
+    mlflow.set_experiment(experiment_name)
     mlflow_run = mlflow.start_run()
     mlflow.log_params({
         "format": args.format,
