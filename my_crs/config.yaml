@@ -2,12 +2,12 @@
 qwen:
   server_url: "http://sinbad2ia.ujaen.es:8050/api/chat"
   model: "qwen3.5:35b"
-  timeout: 60
+  timeout: 120
   max_retries: 3
   think: false
   temperature: 0
   stream: false
-  intent_timeout: 10
+  intent_timeout: 1200
 
 # Pipeline settings
 pipeline:
