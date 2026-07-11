@@ -1,60 +1,64 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CRS Thesis Demo</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='home_premium.css') }}">
 </head>
-<body class="home-body d-flex align-items-center justify-content-center min-vh-100">
-  <div class="text-center home-card p-5">
-    <div class="mb-4">
-      <div class="mb-3">
-        <span class="academic-badge">FINAL YEAR THESIS PROTOTYPE</span>
+<body>
+  <div class="mesh-bg">
+    <div class="color-blob blob-1"></div>
+    <div class="color-blob blob-2"></div>
+    <div class="color-blob blob-3"></div>
+  </div>
+
+  <div class="hero-container">
+    <div class="glass-panel">
+      <div class="badge-wrapper">
+        <span class="glass-badge">CRS-Qwen Prototype</span>
       </div>
-      <h1 class="display-5 fw-bold text-white mb-3">
-        CRS-Qwen: A Two-Stage Conversational Recommender
+      
+      <h1 class="main-title">
+        Conversational<br>
+        <span class="text-gradient">Movie Recommender</span>
       </h1>
-      <p class="lead home-subtitle mb-4">
-        Knowledge-grounded neural retrieval paired with LLM semantic reranking.
+      
+      <p class="subtitle">
+        A state-of-the-art dialogue system bridging Knowledge-Grounded Neural Retrieval (KBRD) with Qwen-powered LLM Semantic Reranking.
       </p>
-    </div>
-    <div class="row feature-row justify-content-center align-items-stretch g-3 mb-4 text-start">
-      <div class="col-md-4">
-        <div class="feature-card academic-card p-3">
-          <div class="academic-step-indicator mb-2">[01] KBRD Neural Retrieval</div>
-          <div class="text-white small">Graph attention network traversing 50,000+ movie nodes to extract top-50 candidates.</div>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <div class="feature-card academic-card p-3">
-          <div class="academic-step-indicator mb-2">[02] LLM Semantic Reranking</div>
-          <div class="text-white small">Context-aware filtering driven by dialogue history and entity constraints.</div>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <div class="feature-card academic-card p-3">
-          <div class="academic-step-indicator mb-2">[03] Qwen Zero-Shot Gen</div>
-          <div class="text-white small">Powered by Qwen LLM for natural, engaging, and accurate conversational responses.</div>
-        </div>
-      </div>
-    </div>
-    
-    <div class="dataset-evaluation mb-5">
-      System Evaluated on the ReDial Dataset (10,006 dialogues) and INSPIRED (1,001 dialogues).
-    </div>
 
-    <a href="/chat" class="btn btn-primary start-btn-academic">
-      Start Conversation
-    </a>
+      <div class="architecture-row">
+        <div class="arch-step">
+          <div class="step-icon">01</div>
+          <h4>Neural Retrieval</h4>
+          <p>R-GCN over 50k+ nodes</p>
+        </div>
+        <div class="arch-step">
+          <div class="step-icon">02</div>
+          <h4>Semantic Reranking</h4>
+          <p>Dialogue context & entity constraints</p>
+        </div>
+        <div class="arch-step">
+          <div class="step-icon">03</div>
+          <h4>Zero-Shot Generation</h4>
+          <p>Powered by Qwen LLM</p>
+        </div>
+      </div>
 
-    <div class="mt-5 academic-footer">
-      Developed by Med Hedi Foughali | Final Year Thesis (2025/2026)<br>
-      Pristini School of AI &amp; Universidad de Jaén
+      <div class="action-section">
+        <a href="/chat" class="btn-launch">
+          <span>Start Chat</span>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+        </a>
+        <div class="eval-note">Evaluated on the ReDial benchmark</div>
+      </div>
+
+      <div class="footer">
+        Pristini School of AI & Universidad de Ja├⌐n
+      </div>
     </div>
   </div>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
