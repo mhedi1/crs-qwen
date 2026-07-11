@@ -167,7 +167,10 @@ def enrich_with_tmdb(title, year=None):
         poster_path = hit.get("poster_path")
         poster_url = f"https://image.tmdb.org/t/p/w300{poster_path}" if poster_path else None
 
-        return {"genre": genre or None, "decade": decade or None, "poster_url": poster_url}
+        raw_rating = hit.get("vote_average")
+        rating = round(float(raw_rating), 1) if raw_rating else None
+
+        return {"genre": genre or None, "decade": decade or None, "poster_url": poster_url, "rating": rating}
     except Exception as e:
         print(f"[TMDB] Enrichment failed for '{title}': {e}")
         return {}
@@ -481,6 +484,7 @@ def api_chat():
             if tmdb.get("decade") and (not cur_decade or cur_decade.lower() == "unknown"):
                 movie["decade"] = tmdb["decade"]
             movie["poster_url"] = tmdb.get("poster_url")
+            movie["rating"] = tmdb.get("rating")
 
     history.append({"role": "system", "content": response_text})
     session["history"] = history

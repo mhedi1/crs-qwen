@@ -1,4 +1,4 @@
-﻿/* ΓöÇΓöÇ Base ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+/* ΓöÇΓöÇ Base ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
 :root {
   --bg-deep:    #ffffff;
   --bg-card:    #ffffff;
@@ -13,6 +13,22 @@
   --seed-green: #15803d;
   --movie-gold: #b45309;
   --danger:     #dc2626;
+}
+
+[data-theme="dark"] {
+  --bg-deep:    #0f172a;
+  --bg-card:    #1e293b;
+  --bg-bubble:  #1e293b;
+  --bg-panel:   #1e293b;
+  --border:     #334155;
+  --text-main:  #f8fafc;
+  --text-muted: #94a3b8;
+  --accent:     #3b82f6;
+  --accent-dim: #2563eb;
+  --kbrd-blue:  #60a5fa;
+  --seed-green: #4ade80;
+  --movie-gold: #fbbf24;
+  --danger:     #ef4444;
 }
 
 body {
@@ -277,7 +293,7 @@ body {
   display: block;
 }
 .movie-meta { margin-top: 4px; display: flex; gap: 8px; flex-wrap: wrap; }
-.genre-tag, .decade-tag {
+.genre-tag, .decade-tag, .rating-tag {
   font-size: .75rem;
   background: rgba(0,0,0,.04);
   border: 1px solid var(--border);

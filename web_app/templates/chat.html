@@ -18,7 +18,10 @@
         Conversational Movie Recommender
       </span>
     </div>
-    <button id="clearBtn" class="btn btn-sm btn-outline-danger">Clear Chat</button>
+    <div class="d-flex align-items-center gap-2">
+      <button id="themeToggle" class="btn btn-sm btn-outline-secondary">🌙 Dark Mode</button>
+      <button id="clearBtn" class="btn btn-sm btn-outline-danger">Clear Chat</button>
+    </div>
   </nav>
 
   <!-- Main Body Flex -->
@@ -31,10 +34,7 @@
             Start the conversation — describe the kind of film you are in the mood for.
           </div>
           <div id="starterButtons" class="starter-grid">
-            <button class="starter-btn">I love horror movies from the 80s</button>
-            <button class="starter-btn">Recommend something like The Godfather</button>
-            <button class="starter-btn">I want a funny comedy for tonight</button>
-            <button class="starter-btn">Something with great action and sci-fi</button>
+            <!-- Buttons will be populated by JS -->
           </div>
         </div>
       </div>
@@ -55,7 +55,7 @@
     </div>
     
     <!-- Profile Sidebar -->
-    <div class="profile-sidebar d-none d-xl-flex flex-column">
+    <div class="profile-sidebar d-none d-lg-flex flex-column">
       <div class="sidebar-header d-flex align-items-center mb-3">
         <div class="pulse-dot me-2"></div>
         <span>SYSTEM INTEL</span>
@@ -145,8 +145,10 @@
           ? `<span class="genre-tag">${escapeHtml(movie.genre)}</span>` : "";
         const decadeBadge = (movie.decade && movie.decade.toLowerCase() !== "unknown")
           ? `<span class="decade-tag">${escapeHtml(movie.decade)}</span>` : "";
-        const metaRow = (genreBadge || decadeBadge)
-          ? `<div class="movie-meta">${genreBadge}${decadeBadge}</div>` : "";
+        const ratingBadge = (movie.rating && movie.rating > 0)
+          ? `<span class="rating-tag">⭐ ${movie.rating}/10</span>` : "";
+        const metaRow = (genreBadge || decadeBadge || ratingBadge)
+          ? `<div class="movie-meta">${genreBadge}${decadeBadge}${ratingBadge}</div>` : "";
         const posterHtml = movie.poster_url
           ? `<img src="${escapeHtml(movie.poster_url)}" class="movie-poster" alt="Movie poster" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="poster-fallback" style="display:none">POSTER<br>UNAVAILABLE</div>`
           : "";
@@ -487,12 +489,39 @@
       }
     }
 
-    document.querySelectorAll(".starter-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        userInput.value = btn.textContent.trim();
-        sendMessage();
+    const STARTER_OPTIONS = [
+      "I love horror movies from the 80s",
+      "Recommend something like The Godfather",
+      "I want a funny comedy for tonight",
+      "Something with great action and sci-fi",
+      "I'm in the mood for a romantic drama",
+      "Give me a classic psychological thriller",
+      "Looking for a family friendly animated movie",
+      "Recommend a fast-paced heist movie",
+      "A thought-provoking indie film, please",
+      "What's a good post-apocalyptic movie?"
+    ];
+
+    function renderStarters() {
+      const container = document.getElementById("starterButtons");
+      if (!container) return;
+      
+      const shuffled = [...STARTER_OPTIONS].sort(() => 0.5 - Math.random());
+      const selected = shuffled.slice(0, 4);
+      
+      container.innerHTML = selected.map(text => 
+        `<button class="starter-btn">${escapeHtml(text)}</button>`
+      ).join("");
+      
+      container.querySelectorAll(".starter-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          userInput.value = btn.textContent.trim();
+          sendMessage();
+        });
       });
-    });
+    }
+
+    renderStarters();
 
     sendBtn.addEventListener("click", sendMessage);
     userInput.addEventListener("keydown", e => {
@@ -509,18 +538,9 @@
           Start the conversation — describe the kind of film you are in the mood for.
         </div>
         <div id="starterButtons" class="starter-grid">
-          <button class="starter-btn">I love horror movies from the 80s</button>
-          <button class="starter-btn">Recommend something like The Godfather</button>
-          <button class="starter-btn">I want a funny comedy for tonight</button>
-          <button class="starter-btn">Something with great action and sci-fi</button>
         </div>
       `;
-      document.querySelectorAll(".starter-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
-          userInput.value = btn.textContent.trim();
-          sendMessage();
-        });
-      });
+      renderStarters();
 
       // Reset sidebar to all dashes immediately
       document.getElementById("profile-turn").innerText    = "—";
@@ -534,6 +554,27 @@
       document.getElementById("profile-decades").innerText = "—";
       document.getElementById("profile-movies").innerHTML  =
         '<span class="text-secondary small">—</span>';
+    });
+
+    // Dark Mode Toggle
+    const themeToggleBtn = document.getElementById("themeToggle");
+    const currentTheme = localStorage.getItem("theme");
+    if (currentTheme === "dark") {
+      document.documentElement.setAttribute("data-theme", "dark");
+      themeToggleBtn.innerText = "☀️ Light Mode";
+    }
+
+    themeToggleBtn.addEventListener("click", () => {
+      let theme = document.documentElement.getAttribute("data-theme");
+      if (theme === "dark") {
+        document.documentElement.removeAttribute("data-theme");
+        localStorage.setItem("theme", "light");
+        themeToggleBtn.innerText = "🌙 Dark Mode";
+      } else {
+        document.documentElement.setAttribute("data-theme", "dark");
+        localStorage.setItem("theme", "dark");
+        themeToggleBtn.innerText = "☀️ Light Mode";
+      }
     });
   </script>
 </body>
