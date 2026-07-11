@@ -22,12 +22,13 @@ response generation.
 
 | System | Reranker@1 |
 |--------|-----------|
-| Pure KBRD baseline | 0.0231 |
+| Pure KBRD baseline (no reranker) | 0.0231 |
 | KBRD + Fusion | 0.0228 |
-| CRS-Qwen (full pipeline) | **0.0290** |
+| CRS-Qwen (full pipeline) | **0.0303** |
 
-**+25.6% improvement** over the pure 
-KBRD baseline on the ReDial test set.
+**+31.2% improvement** over the pure 
+KBRD baseline on the ReDial test set 
+(1,301 conversations, full test set).
 
 ---
 
