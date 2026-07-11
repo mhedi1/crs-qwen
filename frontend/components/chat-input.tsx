@@ -30,7 +30,7 @@ export function ChatInput({
   }
 
   return (
-    <div className="border-t border-border bg-panel/60 p-3 backdrop-blur-md md:p-4">
+    <div className="px-3 pb-4 pt-2 md:px-4">
       {showStarters && (
         <div className="mb-3 flex flex-wrap gap-2">
           {STARTERS.map((s) => (
@@ -39,7 +39,7 @@ export function ChatInput({
               type="button"
               disabled={loading}
               onClick={() => onSend(s)}
-              className="rounded-full border border-border bg-secondary/60 px-3 py-1.5 text-xs font-medium text-secondary-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary disabled:opacity-40"
+              className="glass rounded-full border border-border px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:text-foreground disabled:opacity-40"
             >
               {s}
             </button>
@@ -47,19 +47,14 @@ export function ChatInput({
         </div>
       )}
 
-      <div className="flex items-end gap-2 rounded-xl border border-border bg-card p-2 shadow-sm focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30">
+      <div className="glass flex items-end gap-2 rounded-2xl border border-border p-2 transition-all focus-within:border-primary/50 focus-within:glow-primary">
         <textarea
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onCompositionStart={() => (composingRef.current = true)}
           onCompositionEnd={() => (composingRef.current = false)}
           onKeyDown={(e) => {
-            if (
-              e.key === "Enter" &&
-              !e.shiftKey &&
-              !composingRef.current &&
-              e.nativeEvent.keyCode !== 229
-            ) {
+            if (e.key === "Enter" && !e.shiftKey && !composingRef.current && e.nativeEvent.keyCode !== 229) {
               e.preventDefault()
               submit()
             }
@@ -73,7 +68,7 @@ export function ChatInput({
           onClick={submit}
           disabled={loading || !value.trim()}
           aria-label="Send message"
-          className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          className="grad-primary flex size-9 shrink-0 items-center justify-center rounded-xl text-primary-foreground shadow-lg shadow-primary/30 transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
         >
           <ArrowUp className="size-5" aria-hidden="true" />
         </button>

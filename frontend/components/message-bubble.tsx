@@ -26,24 +26,24 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: "easeOut" }}
+      initial={{ opacity: 0, y: 14, filter: "blur(4px)" }}
+      animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
       className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}
     >
       {!isUser && (
-        <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 ring-1 ring-primary/30">
-          <Sparkles className="size-4 text-primary" aria-hidden="true" />
+        <div className="grad-primary mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl text-primary-foreground shadow-lg shadow-primary/25">
+          <Sparkles className="size-4" aria-hidden="true" />
         </div>
       )}
 
       <div className={cn("flex max-w-[85%] flex-col gap-3", isUser && "items-end")}>
         <div
           className={cn(
-            "rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
+            "px-4 py-2.5 text-sm leading-relaxed",
             isUser
-              ? "rounded-br-sm bg-primary text-primary-foreground"
-              : "rounded-bl-sm bg-secondary text-secondary-foreground",
+              ? "grad-primary rounded-3xl rounded-br-md text-primary-foreground shadow-lg shadow-primary/20"
+              : "glass rounded-3xl rounded-bl-md text-foreground",
           )}
         >
           {renderText(message.content)}
@@ -60,8 +60,8 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
       </div>
 
       {isUser && (
-        <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-secondary ring-1 ring-border">
-          <User className="size-4 text-muted-foreground" aria-hidden="true" />
+        <div className="glass mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl text-muted-foreground">
+          <User className="size-4" aria-hidden="true" />
         </div>
       )}
     </motion.div>

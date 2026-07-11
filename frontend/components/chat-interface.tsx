@@ -25,14 +25,14 @@ function uid() {
 function TypingIndicator() {
   return (
     <div className="flex gap-3">
-      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 ring-1 ring-primary/30">
-        <Sparkles className="size-4 text-primary" aria-hidden="true" />
+      <div className="grad-primary mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl text-primary-foreground shadow-lg shadow-primary/25">
+        <Sparkles className="size-4" aria-hidden="true" />
       </div>
-      <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-sm bg-secondary px-4 py-3.5">
+      <div className="glass flex items-center gap-1.5 rounded-3xl rounded-bl-md px-4 py-3.5">
         {[0, 1, 2].map((i) => (
           <span
             key={i}
-            className="size-2 rounded-full bg-muted-foreground"
+            className="size-2 rounded-full bg-primary"
             style={{ animation: "dot-pulse 1.2s ease-in-out infinite", animationDelay: `${i * 0.15}s` }}
           />
         ))}
@@ -43,18 +43,23 @@ function TypingIndicator() {
 
 function EmptyState() {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-6 py-16 text-center">
-      <div className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-primary/15 ring-1 ring-primary/30">
-        <Sparkles className="size-7 text-primary" aria-hidden="true" />
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      className="flex flex-1 flex-col items-center justify-center px-6 py-16 text-center"
+    >
+      <div className="grad-primary mb-5 flex size-16 items-center justify-center rounded-2xl text-primary-foreground shadow-xl shadow-primary/40">
+        <Sparkles className="size-8" aria-hidden="true" />
       </div>
-      <h2 className="text-balance text-xl font-semibold tracking-tight text-foreground">
+      <h2 className="text-balance text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
         What are you in the mood to watch?
       </h2>
-      <p className="mt-2 max-w-md text-pretty text-sm leading-relaxed text-muted-foreground">
+      <p className="mt-3 max-w-md text-pretty text-sm leading-relaxed text-muted-foreground">
         Describe a genre, an era, or films you love. CineSeek runs a KBRD retrieval and rerank pipeline, then explains
         each pick — with full visibility into the candidates it considered.
       </p>
-    </div>
+    </motion.div>
   )
 }
 
@@ -139,7 +144,7 @@ export function ChatInterface() {
   }
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-background">
+    <div className="app-aura flex h-dvh overflow-hidden bg-background">
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center">
@@ -150,7 +155,7 @@ export function ChatInterface() {
             type="button"
             onClick={() => setSidebarOpen((o) => !o)}
             aria-label="Toggle System Intel panel"
-            className="mr-3 flex size-9 items-center justify-center rounded-md border border-border bg-secondary text-secondary-foreground transition-colors hover:bg-muted lg:hidden"
+            className="glass mr-3 flex size-9 items-center justify-center rounded-xl border border-border text-secondary-foreground transition-colors hover:bg-secondary lg:hidden"
           >
             {sidebarOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
           </button>
