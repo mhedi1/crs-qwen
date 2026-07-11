@@ -1,8 +1,0 @@
-KBRD + Qwen Turn-by-Turn Evaluation Results
-Dataset: ReDial test set
-Conversations: 200
-Instances: 640
-
-Recall@1: 0.0563
-Recall@10: 0.2313
-Recall@50: 0.4188

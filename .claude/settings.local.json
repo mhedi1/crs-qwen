@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python my_crs/evaluate.py --max_samples 1 --format 3 --dataset redial)"
+    ]
+  }
+}

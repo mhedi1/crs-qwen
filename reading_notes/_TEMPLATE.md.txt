@@ -1,0 +1,19 @@
+# [Paper Title]
+
+**Authors:** 
+**Year:** 
+**Venue:** 
+**Link:** 
+
+## Problem
+What problem does this paper try to solve?
+
+## Method
+How does it solve it? (3-5 sentences)
+
+## Results
+What are the headline numbers?
+
+## Relation to my thesis
+How does this paper relate to KBRD-Qwen CRS?
+What can I cite it for?

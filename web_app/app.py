@@ -55,14 +55,17 @@ _GENRE_KEYWORD_MAP = {
 }
 
 _DECADE_PATTERNS = [
-    (r"\b50s\b|\b1950s\b|\bfifties\b",               "1950s"),
-    (r"\b60s\b|\b1960s\b|\bsixties\b",               "1960s"),
-    (r"\b70s\b|\b1970s\b|\bseventies\b",             "1970s"),
-    (r"\b80s\b|\b1980s\b|\brighties\b|\beighties\b", "1980s"),
-    (r"\b90s\b|\b1990s\b|\bnineties\b",              "1990s"),
-    (r"\b00s\b|\b2000s\b",                            "2000s"),
-    (r"\b2010s\b",                                    "2010s"),
-    (r"\b2020s\b",                                    "2020s"),
+    (r"\b(192\d)s?\b|\b20s\b|twenties", "1920s"),
+    (r"\b(193\d)s?\b|\b30s\b|thirties", "1930s"),
+    (r"\b(194\d)s?\b|\b40s\b|forties", "1940s"),
+    (r"\b(195\d)s?\b|\b50s\b|fifties", "1950s"),
+    (r"\b(196\d)s?\b|\b60s\b|sixties", "1960s"),
+    (r"\b(197\d)s?\b|\b70s\b|seventies", "1970s"),
+    (r"\b(198\d)s?\b|\b80s\b|eighties|righties", "1980s"),
+    (r"\b(199\d)s?\b|\b90s\b|nineties", "1990s"),
+    (r"\b(200\d)s?\b|\b00s\b", "2000s"),
+    (r"\b(201\d)s?\b|\b10s\b", "2010s"),
+    (r"\b(202\d)s?\b", "2020s"),
 ]
 
 
@@ -96,8 +99,9 @@ def _extract_mentioned_movies(text: str) -> list:
             found.append(title)
     for m in re.finditer(
         r'\b(?:like|loved?|watch(?:ed)?|seen|saw|enjoy(?:ed)?|similar to|such as|films? like|movies? like)'
-        r'\s+([A-Z][A-Za-z0-9 :\'!&\-]{1,50}?)(?=[,\.!?\n]|$|\s+(?:and|but|or|which|because)\b)',
+        r'\s+([A-Za-z0-9 :\'!\&-]{2,50}?)(?=[,\.!?\n]|$|\s+(?:and|but|or|which|because)\b)',
         text,
+        re.IGNORECASE
     ):
         title = m.group(1).strip()
         if len(title) > 2 and title not in found:
