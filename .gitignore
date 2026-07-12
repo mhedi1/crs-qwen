@@ -7,3 +7,4 @@ __pycache__/
 .DS_Store
 logs/
 *.log
+web_app/static/react/
