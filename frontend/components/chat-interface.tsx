@@ -9,8 +9,6 @@ import { MessageBubble } from "./message-bubble"
 import { ChatInput } from "./chat-input"
 import { SystemIntel } from "./system-intel"
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-
 const STARTERS = [
   "I love 80s sci-fi like Blade Runner",
   "Recommend a tense 90s crime thriller",
@@ -158,7 +156,7 @@ export function ChatInterface() {
     setLoading(true)
 
     try {
-      const res = await fetch(`${API_BASE}/api/chat`, {
+      const res = await fetch("/api/chat", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -210,7 +208,7 @@ export function ChatInterface() {
 
   async function handleClear() {
     try {
-      await fetch(`${API_BASE}/api/clear`, { method: 'POST', credentials: 'include' })
+      await fetch('/api/clear', { method: 'POST', credentials: 'include' })
     } catch (e) {
       console.error('Failed to clear backend state', e)
     }

@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from flask import Flask, render_template, request, session, jsonify, send_from_directory
+from flask import Flask, render_template, request, session, jsonify
 import traceback
 import re
 import requests
@@ -583,24 +583,6 @@ def api_clear():
     session["last_movie"] = None
     session.modified = True
     return jsonify({"status": "cleared"})
-
-
-@app.route('/app/', defaults={'path': ''})
-@app.route('/app/<path:path>')
-def serve_react(path):
-    static_dir = os.path.join(
-        os.path.dirname(__file__),
-        'static', 'react'
-    )
-    if path and os.path.exists(
-        os.path.join(static_dir, path)
-    ):
-        return send_from_directory(
-            static_dir, path
-        )
-    return send_from_directory(
-        static_dir, 'index.html'
-    )
 
 
 if __name__ == "__main__":
