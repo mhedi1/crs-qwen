@@ -115,7 +115,9 @@ _recommender_error = None
 
 def enrich_with_tmdb(title, year=None):
     try:
-        params = {"query": title, "api_key": TMDB_API_KEY}
+        # Strip trailing (YYYY) or (YYYY film) from title before searching TMDB
+        search_title = re.sub(r'\s*\(\d{4}(?:\s*film)?\)', '', title, flags=re.IGNORECASE).strip()
+        params = {"query": search_title, "api_key": TMDB_API_KEY}
         if year and str(year).isdigit() and len(str(year)) == 4:
             params["primary_release_year"] = str(year)
 
@@ -169,8 +171,10 @@ def enrich_with_tmdb(title, year=None):
 
         raw_rating = hit.get("vote_average")
         rating = round(float(raw_rating), 1) if raw_rating else None
+        
+        overview = hit.get("overview")
 
-        return {"genre": genre or None, "decade": decade or None, "poster_url": poster_url, "rating": rating}
+        return {"genre": genre or None, "decade": decade or None, "poster_url": poster_url, "rating": rating, "overview": overview}
     except Exception as e:
         print(f"[TMDB] Enrichment failed for '{title}': {e}")
         return {}
@@ -485,6 +489,7 @@ def api_chat():
                 movie["decade"] = tmdb["decade"]
             movie["poster_url"] = tmdb.get("poster_url")
             movie["rating"] = tmdb.get("rating")
+            movie["overview"] = tmdb.get("overview")
 
     history.append({"role": "system", "content": response_text})
     session["history"] = history
