@@ -115,8 +115,8 @@ _recommender_error = None
 
 def enrich_with_tmdb(title, year=None):
     try:
-        # Strip trailing (YYYY) or (YYYY film) from title before searching TMDB
-        search_title = re.sub(r'\s*\(\d{4}(?:\s*film)?\)', '', title, flags=re.IGNORECASE).strip()
+        # Strip any parenthetical disambiguation before searching TMDB
+        search_title = re.sub(r'\s*\(.*?\)', '', title).strip()
         params = {"query": search_title, "api_key": TMDB_API_KEY}
         if year and str(year).isdigit() and len(str(year)) == 4:
             params["primary_release_year"] = str(year)

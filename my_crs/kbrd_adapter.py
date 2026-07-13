@@ -250,8 +250,7 @@ def _clean_title(entity_uri: str) -> str:
     title = match.group(1) if match else str(entity_uri)
 
     title = title.replace("_", " ")
-    title = re.sub(r"\s*\(film\)", "", title, flags=re.IGNORECASE)
-    title = re.sub(r"\s*\(\d{4} film\)", "", title, flags=re.IGNORECASE)
+    title = re.sub(r"\s*\(.*?\)", "", title)
     title = title.strip()
 
     return title
