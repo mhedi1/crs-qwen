@@ -9,11 +9,19 @@ import { MessageBubble } from "./message-bubble"
 import { ChatInput } from "./chat-input"
 import { SystemIntel } from "./system-intel"
 
-const STARTERS = [
+const ALL_STARTERS = [
   "I love 80s sci-fi like Blade Runner",
   "Recommend a tense 90s crime thriller",
   "Something funny and quirky",
   "I want a scary movie for tonight",
+  "Looking for a hidden gem from the 2000s",
+  "I need a feel-good romance movie",
+  "A mind-bending psychological thriller",
+  "What's a good action comedy like Rush Hour?",
+  "Recommend a classic 70s horror",
+  "Something visually stunning",
+  "A really sad drama that will make me cry",
+  "I loved The Matrix, what else is like it?"
 ]
 
 const EMPTY_PROFILE: Profile = {
@@ -94,6 +102,12 @@ function StarterCard({ text, onSend, index }: { text: string, onSend: (s:string)
 
 function EmptyState({ onSend }: { onSend: (text: string) => void }) {
   const titleWords = "What are you in the mood to watch?".split(" ")
+  const [starters, setStarters] = useState<string[]>([])
+
+  useEffect(() => {
+    const shuffled = [...ALL_STARTERS].sort(() => 0.5 - Math.random())
+    setStarters(shuffled.slice(0, 4))
+  }, [])
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-4 py-10 md:py-16 text-center z-10 relative">
@@ -124,8 +138,10 @@ function EmptyState({ onSend }: { onSend: (text: string) => void }) {
         transition={{ delay: 0.4, duration: 0.8 }}
         className="mt-12 grid w-full max-w-[700px] grid-cols-1 gap-4 sm:grid-cols-2 perspective-[1000px]"
       >
-        {STARTERS.map((s, i) => (
+        {starters.length > 0 ? starters.map((s, i) => (
           <StarterCard key={s} text={s} onSend={onSend} index={i} />
+        )) : ALL_STARTERS.slice(0, 4).map((s, i) => (
+          <div key={i} className="h-[74px] rounded-2xl bg-card/10 animate-pulse border border-border/10" />
         ))}
       </motion.div>
     </div>
