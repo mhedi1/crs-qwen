@@ -11,5 +11,12 @@ export async function POST(request: NextRequest) {
     }
   )
   
-  return NextResponse.json({ status: 'cleared' })
+  const res = NextResponse.json({ status: 'cleared' })
+  
+  const setCookie = response.headers.get('set-cookie')
+  if (setCookie) {
+    res.headers.set('set-cookie', setCookie)
+  }
+  
+  return res
 }
