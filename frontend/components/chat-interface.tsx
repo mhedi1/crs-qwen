@@ -240,7 +240,10 @@ export function ChatInterface() {
 
   async function handleClear() {
     try {
-      await fetch('/api/clear', { method: 'POST', credentials: 'include' })
+      await fetch('/api/clear', { 
+        method: 'POST', 
+        credentials: 'include' 
+      })
     } catch (e) {
       console.error('Failed to clear backend state', e)
     }
@@ -249,6 +252,7 @@ export function ChatInterface() {
     lastMovieRef.current = null
     prevRecommendedRef.current = []
     turnRef.current = 0
+    sessionStorage.removeItem("chat_state")
   }
 
   return (

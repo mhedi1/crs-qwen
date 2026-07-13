@@ -62,6 +62,11 @@ export function MovieCard({ movie, candidates, selectedCandidate, followUp }: Mo
             ))}
           </div>
 
+          {movie.overview && (
+            <p className="text-[0.75rem] text-muted-foreground/80 leading-[1.3] mt-1.5 italic">
+              {movie.overview.split(/(?<=[.!?])\s+/)[0]}
+            </p>
+          )}
 
         </div>
       </div>
