@@ -137,12 +137,44 @@ export function ChatInterface() {
   const [profile, setProfile] = useState<Profile>(EMPTY_PROFILE)
   const [loading, setLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [initialized, setInitialized] = useState(false)
 
   const lastMovieRef = useRef<Movie | null>(null)
   const prevRecommendedRef = useRef<string[]>([])
   const turnRef = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
   const dragConstraintsRef = useRef<HTMLDivElement>(null)
+
+  // Load state on mount
+  useEffect(() => {
+    const saved = sessionStorage.getItem("chat_state")
+    if (saved) {
+      try {
+        const data = JSON.parse(saved)
+        if (data.messages) setMessages(data.messages)
+        if (data.profile) setProfile(data.profile)
+        if (data.lastMovie) lastMovieRef.current = data.lastMovie
+        if (data.prevRecommended) prevRecommendedRef.current = data.prevRecommended
+        if (data.turn) turnRef.current = data.turn
+      } catch (e) {
+        console.error("Failed to parse chat state", e)
+      }
+    }
+    setInitialized(true)
+  }, [])
+
+  // Save state on change
+  useEffect(() => {
+    if (!initialized) return
+    const state = {
+      messages,
+      profile,
+      lastMovie: lastMovieRef.current,
+      prevRecommended: prevRecommendedRef.current,
+      turn: turnRef.current
+    }
+    sessionStorage.setItem("chat_state", JSON.stringify(state))
+  }, [messages, profile, initialized])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })

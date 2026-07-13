@@ -17,25 +17,25 @@ export function MovieCard({ movie, candidates, selectedCandidate, followUp }: Mo
 
   return (
     <div className="mt-1.5 rounded-[16px] bg-card border border-border/80 shadow-sm overflow-hidden flex flex-col w-full max-w-full relative group transition-colors hover:border-primary/50">
-      <div className="flex gap-3 p-4 items-stretch h-full">
+      <div className="flex gap-3 p-3.5 items-stretch h-full">
         {/* Poster */}
-        <div className="w-[90px] shrink-0 h-full flex items-center justify-center">
+        <div className="w-[80px] shrink-0 h-full flex items-center justify-center">
           {movie.poster_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={movie.poster_url || "/placeholder.svg"}
               alt={`Poster for ${movie.title}`}
-              className="w-full h-auto rounded-[8px] object-cover block shadow-sm border border-border/40 max-h-[135px] transition-transform duration-500 group-hover:scale-105 group-hover:shadow-md"
+              className="w-full h-auto rounded-[8px] object-cover block shadow-sm border border-border/40 transition-transform duration-500 group-hover:scale-105 group-hover:shadow-md"
             />
           ) : (
-            <div className="w-full h-[135px] bg-[#f1f5f9] dark:bg-muted border border-[#cbd5e1] dark:border-border rounded-[8px] text-[#475569] dark:text-muted-foreground font-mono text-[0.6rem] text-center flex items-center justify-center leading-[1.4]">
+            <div className="w-full h-[120px] bg-[#f1f5f9] dark:bg-muted border border-[#cbd5e1] dark:border-border rounded-[8px] text-[#475569] dark:text-muted-foreground font-mono text-[0.6rem] text-center flex items-center justify-center leading-[1.3] p-1">
               POSTER<br />UNAVAILABLE
             </div>
           )}
         </div>
 
         {/* Meta */}
-        <div className="flex-1 min-w-0 flex flex-col py-0.5">
+        <div className="flex-1 min-w-0 flex flex-col justify-center py-1">
           <div className="flex items-start justify-between gap-2">
             <h3 className="text-[1.1rem] font-bold text-foreground leading-tight tracking-tight mb-1.5">{movie.title}</h3>
             {typeof movie.rating === "number" && movie.rating > 0 && (
@@ -45,7 +45,7 @@ export function MovieCard({ movie, candidates, selectedCandidate, followUp }: Mo
             )}
           </div>
           
-          <div className="flex gap-1.5 flex-wrap mb-3">
+          <div className="flex gap-1.5 flex-wrap mb-1">
             {movie.decade && (
               <span className="inline-flex items-center gap-1 text-[0.7rem] font-medium bg-transparent border border-border/80 text-muted-foreground rounded-full px-2 py-0.5 leading-none">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-70"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
@@ -62,11 +62,7 @@ export function MovieCard({ movie, candidates, selectedCandidate, followUp }: Mo
             ))}
           </div>
 
-          {movie.overview && (
-            <p className="text-[0.85rem] text-muted-foreground leading-[1.5] line-clamp-2">
-              {movie.overview}
-            </p>
-          )}
+
         </div>
       </div>
 
