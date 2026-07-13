@@ -8,3 +8,6 @@ __pycache__/
 logs/
 *.log
 web_app/static/react/
+test_kbrd.py
+saved/
+movie-recommender-web-app.zip
