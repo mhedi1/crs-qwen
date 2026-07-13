@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { motion, AnimatePresence } from "motion/react"
 import type { Candidate, Movie, SelectedCandidate } from "@/lib/types"
 
@@ -13,10 +13,11 @@ interface MovieCardProps {
 
 export function MovieCard({ movie, candidates, selectedCandidate, followUp }: MovieCardProps) {
   const [open, setOpen] = useState(false)
+  const cardRef = useRef<HTMLDivElement>(null)
   const genres = movie.genre?.split(",").map((g) => g.trim()).filter(Boolean) ?? []
 
   return (
-    <div className="mt-1.5 rounded-[16px] bg-card border border-border/80 shadow-sm overflow-hidden flex flex-col w-full max-w-full relative group transition-colors hover:border-primary/50">
+    <div ref={cardRef} className="mt-1.5 rounded-[16px] bg-card border border-border/80 shadow-sm overflow-hidden flex flex-col w-full max-w-full relative group transition-colors hover:border-primary/50">
       <div className="flex gap-3 p-3.5 items-stretch h-full">
         {/* Poster */}
         <div className="w-[80px] shrink-0 h-full flex items-center justify-center">
@@ -86,7 +87,15 @@ export function MovieCard({ movie, candidates, selectedCandidate, followUp }: Mo
           <button
             type="button"
             onClick={() => {
-              setOpen((o) => !o)
+              setOpen((o) => {
+                const next = !o
+                if (next) {
+                  setTimeout(() => {
+                    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+                  }, 250)
+                }
+                return next
+              })
             }}
             aria-expanded={open}
             className="text-[0.75rem] font-medium text-muted-foreground transition-colors hover:text-foreground inline-flex items-center gap-1"
