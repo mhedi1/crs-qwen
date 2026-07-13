@@ -86,18 +86,7 @@ export function MovieCard({ movie, candidates, selectedCandidate, followUp }: Mo
           <button
             type="button"
             onClick={() => {
-              setOpen((o) => {
-                const next = !o
-                if (next) {
-                  setTimeout(() => {
-                    const container = document.getElementById("chat-scroll-container")
-                    if (container) {
-                      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" })
-                    }
-                  }, 150)
-                }
-                return next
-              })
+              setOpen((o) => !o)
             }}
             aria-expanded={open}
             className="text-[0.75rem] font-medium text-muted-foreground transition-colors hover:text-foreground inline-flex items-center gap-1"
