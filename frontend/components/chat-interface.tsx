@@ -280,7 +280,7 @@ export function ChatInterface() {
           </button>
         </div>
 
-        <div id="chat-scroll-container" ref={scrollRef} className="flex-1 overflow-y-auto scrollbar-thin pb-32">
+        <div id="chat-scroll-container" ref={scrollRef} className="flex-1 overflow-y-auto scrollbar-thin pb-32 scroll-pb-[140px]">
           <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-4 py-8 md:px-8">
             {messages.length === 0 && !loading ? (
               <EmptyState onSend={handleSend} />
