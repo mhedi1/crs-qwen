@@ -104,6 +104,14 @@ def _extract_mentioned_movies(text: str) -> list:
             found.append(title)
     for m in re.finditer(r'\b([A-Z][a-z0-9]*(?:\s+(?:[a-z]{1,3}\s+)?[A-Z][a-z0-9]*)+)\b', text):
         title = m.group(1).strip()
+        lower_title = title.lower()
+        ignore = {
+            "actually i", "personally i", "honestly i", "yes i", "no i", 
+            "well i", "but i", "and i", "so i", "i prefer", "i want", 
+            "i love", "i like", "i hate", "i think", "i feel", "i guess"
+        }
+        if lower_title in ignore:
+            continue
         if len(title) > 2 and title not in found:
             found.append(title)
     return found
