@@ -578,6 +578,7 @@ def get_kbrd_candidates(
                 "num_dialogue_seed_ids": 0, "num_qwen_seed_ids": 0,
                 "dialogue_seed_entity_ids": [], "qwen_seed_entity_ids": [],
                 "qwen_fallback_titles": [],
+                "qwen_fallback_executed": False,
                 "weak_seed_fallback": False,
                 "filtered_noisy_seeds": [],
                 "num_filtered_noisy_seeds": 0,
@@ -593,10 +594,12 @@ def get_kbrd_candidates(
 
     _seeds_before_fallback = len(dialogue_seed_ids)
     _weak_seed_fallback = _seeds_before_fallback < _WEAK_SEED_THRESHOLD
+    _qwen_fallback_executed = False
     qwen_seed_ids: list = []
     _qwen_titles: list = []
 
     if _weak_seed_fallback and run_qwen_fallback:
+        _qwen_fallback_executed = True
         logger.warning("[KBRD Adapter] Weak seeds detected, using Qwen fallback")
         try:
             prompt = (
@@ -652,6 +655,7 @@ def get_kbrd_candidates(
                 "dialogue_seed_entity_ids": dialogue_seed_ids,
                 "qwen_seed_entity_ids": qwen_seed_ids,
                 "qwen_fallback_titles": _qwen_titles,
+                "qwen_fallback_executed": _qwen_fallback_executed,
                 "weak_seed_fallback": _weak_seed_fallback,
                 "filtered_noisy_seeds": filtered_1grams,
                 "num_filtered_noisy_seeds": len(filtered_1grams),
@@ -735,6 +739,7 @@ def get_kbrd_candidates(
                 "dialogue_seed_entity_ids": dialogue_seed_ids,
                 "qwen_seed_entity_ids": qwen_seed_ids,
                 "qwen_fallback_titles": _qwen_titles,
+                "qwen_fallback_executed": _qwen_fallback_executed,
                 "weak_seed_fallback": _weak_seed_fallback,
                 "filtered_noisy_seeds": filtered_1grams,
                 "num_filtered_noisy_seeds": len(filtered_1grams),
@@ -769,6 +774,7 @@ def get_kbrd_candidates(
                 "dialogue_seed_entity_ids": dialogue_seed_ids,
                 "qwen_seed_entity_ids": qwen_seed_ids,
                 "qwen_fallback_titles": _qwen_titles,
+                "qwen_fallback_executed": _qwen_fallback_executed,
                 "weak_seed_fallback": _weak_seed_fallback,
                 "filtered_noisy_seeds": filtered_1grams,
                 "num_filtered_noisy_seeds": len(filtered_1grams),
@@ -896,6 +902,7 @@ def get_kbrd_candidates(
             "dialogue_seed_entity_ids": dialogue_seed_ids,
             "qwen_seed_entity_ids": qwen_seed_ids,
             "qwen_fallback_titles": _qwen_titles,
+            "qwen_fallback_executed": _qwen_fallback_executed,
             "weak_seed_fallback": _weak_seed_fallback,
             "filtered_noisy_seeds": filtered_1grams,
             "num_filtered_noisy_seeds": len(filtered_1grams),

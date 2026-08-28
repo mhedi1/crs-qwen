@@ -249,7 +249,9 @@ def evaluate(args):
             print(f"INSPIRED dataset not found at {data_path}.\nPlease download it first.")
             return
 
-    if args.skip_reranker:
+    if args.retrieval_mode != "legacy":
+        mode_label = f"V2 {args.retrieval_mode} (skip_reranker={args.skip_reranker})"
+    elif args.skip_reranker:
         mode_label = "KBRD-only"
     elif args.recommendation_only:
         mode_label = "recommendation only"
@@ -378,6 +380,12 @@ def evaluate(args):
                                         "weak_seed_fallback": _diag.get("weak_seed_fallback", False),
                                         "num_extracted_seeds": _diag.get("num_extracted_seeds", 0),
                                         "num_matched_seeds": _diag.get("num_matched_seeds", 0),
+                                        "num_dialogue_seed_ids": _diag.get("num_dialogue_seed_ids", 0),
+                                        "num_qwen_seed_ids": _diag.get("num_qwen_seed_ids", 0),
+                                        "dialogue_seed_entity_ids": _diag.get("dialogue_seed_entity_ids", []),
+                                        "qwen_seed_entity_ids": _diag.get("qwen_seed_entity_ids", []),
+                                        "qwen_fallback_titles": _diag.get("qwen_fallback_titles", []),
+                                        "qwen_fallback_executed": _diag.get("qwen_fallback_executed", False),
                                         "filtered_noisy_seeds": _diag.get("filtered_noisy_seeds", []),
                                         "num_filtered_noisy_seeds": _diag.get("num_filtered_noisy_seeds", 0),
                                         "num_fused_seed_candidates": _diag.get("num_fused_seed_candidates", 0),
@@ -603,10 +611,13 @@ def evaluate(args):
     # Save error analysis JSONL if requested
     ea_path = None
     if error_analysis_records is not None:
-        reranker_tag = "kbrd_only" if args.skip_reranker else "reranked"
+        if args.retrieval_mode != "legacy":
+            retrieval_tag = args.retrieval_mode
+        else:
+            retrieval_tag = "kbrd_only" if args.skip_reranker else "reranked"
         ea_dir = os.path.join(results_dir, "error_analysis")
         os.makedirs(ea_dir, exist_ok=True)
-        ea_filename = f"error_analysis_{args.dataset}_format{args.format}_{reranker_tag}_{timestamp}.jsonl"
+        ea_filename = f"error_analysis_{args.dataset}_format{args.format}_{retrieval_tag}_{timestamp}.jsonl"
         ea_path = os.path.join(ea_dir, ea_filename)
         fd_ea, tmp_ea = tempfile.mkstemp(dir=ea_dir, suffix=".tmp")
         try:
