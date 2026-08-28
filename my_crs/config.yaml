@@ -18,6 +18,10 @@ pipeline:
   genre_boost_factor: 15
   max_history_turns: 5
   serialisation_format: 1
+  # Explicit feature flags for retrieval fusion
+  use_seed_fusion: true
+  use_qwen_seed_fallback: true
+  use_qwen_candidate_fusion: true
 
 # Entity extraction settings
 extraction:

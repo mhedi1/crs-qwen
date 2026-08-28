@@ -212,6 +212,7 @@ def evaluate(args):
         "recommendation_only": args.recommendation_only,
         "skip_reranker": args.skip_reranker,
         "disable_fusion": args.disable_fusion,
+        "retrieval_mode": args.retrieval_mode,
     })
 
     k_values = _cfg["evaluation"]["k_values"]
@@ -298,6 +299,7 @@ def evaluate(args):
                                     top_k=_cfg["pipeline"]["top_k_candidates"],
                                     diagnostics=_diag,
                                     use_fusion=not args.disable_fusion,
+                                    retrieval_mode=args.retrieval_mode,
                                 )
 
                                 # Compute all values before appending to prevent partial appends if an exception fires
@@ -646,6 +648,8 @@ if __name__ == "__main__":
                         help="Skip Qwen reranking; use KBRD top-1 candidate directly")
     parser.add_argument("--disable_fusion", action="store_true", default=False,
                         help="Disable Candidate Fusion; use pure KBRD candidates only")
+    parser.add_argument("--retrieval_mode", type=str, choices=["legacy", "kbrd", "seed_fusion", "full"], default="legacy",
+                        help="V2 Retrieval Ablation Mode. 'legacy' relies on YAML/disable_fusion.")
     parser.add_argument("--save_error_analysis", action="store_true", default=False,
                         help="Save per-instance error analysis records to experiments/error_analysis/")
 
