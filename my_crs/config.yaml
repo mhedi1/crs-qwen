@@ -25,6 +25,7 @@ pipeline:
 
 # Entity extraction settings
 extraction:
+  resolver_version: "v2"
   fuzzy_cutoff_entity: 0.92
   fuzzy_cutoff_title: 0.85
   person_match_threshold: 85

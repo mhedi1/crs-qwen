@@ -193,6 +193,8 @@ _id2entity = None
 _movie_ids = None
 _entity2id = None
 _movie_title_to_id = {}
+_movie_title_to_ids = {}
+_RESOLVER_VERSION = _cfg["extraction"].get("resolver_version", "v1")
 
 
 def get_fallback_candidates(top_k: int) -> List[Dict[str, Any]]:
@@ -206,7 +208,7 @@ def get_fallback_candidates(top_k: int) -> List[Dict[str, Any]]:
 
 
 def _load_kbrd_resources() -> None:
-    global _data_loaded, _has_error, _id2entity, _movie_ids, _entity2id, _movie_title_to_id
+    global _data_loaded, _has_error, _id2entity, _movie_ids, _entity2id, _movie_title_to_id, _movie_title_to_ids
 
     if _data_loaded or _has_error:
         return
@@ -234,6 +236,7 @@ def _load_kbrd_resources() -> None:
                 if _is_valid_movie_title(clean_t):
                     clean_lookup = re.sub(r"[^\w\s]", "", clean_t).strip()
                     _movie_title_to_id[clean_lookup] = mid
+                    _movie_title_to_ids.setdefault(clean_lookup, []).append(mid)
 
         _data_loaded = True
 
@@ -364,14 +367,14 @@ def _load_kbrd_model():
         no_cuda = not torch.cuda.is_available()
         if no_cuda:
             logger.info("[KBRD Neural] CUDA not available â€” loading model on CPU")
-        logger.info("[KBRD Neural] Loading model from saved/kbrd_model")
+        logger.info("[KBRD Neural] Loading model from saved/kbrd_model_retrained")
         opt = {
-            'model_file': os.path.join(KBRD_REPO_PATH, 'saved', 'kbrd_model'),
+            'model_file': os.path.join(KBRD_REPO_PATH, 'saved', 'kbrd_model_retrained'),
             'datatype': 'test',
             'datapath': os.path.join(KBRD_REPO_PATH, 'data'),
             'no_cuda': no_cuda,
             'override': {
-                'model_file': os.path.join(KBRD_REPO_PATH, 'saved', 'kbrd_model'),
+                'model_file': os.path.join(KBRD_REPO_PATH, 'saved', 'kbrd_model_retrained'),
                 'datapath': os.path.join(KBRD_REPO_PATH, 'data'),
                 'no_cuda': no_cuda,
             }
@@ -935,35 +938,214 @@ def _get_spacy_nlp():
 
 def _is_valid_one_word_seed(phrase: str, doc) -> bool:
     """
-    Stricter filter for 1-gram movie candidates to avoid noisy matches like 'it', 'saw', 'time'.
+    High-precision resolver for one-word movie titles.
+
+    Ordinary stopwords are never accepted. A small set of legitimate
+    ambiguous movie titles (e.g. It, Her, Up, Us) requires explicit
+    movie-related context.
     """
     from spacy.lang.en.stop_words import STOP_WORDS
-    strong_context = {"movie", "film", "called", "titled", "named"}
 
-    is_stopword = phrase in STOP_WORDS
+    phrase = phrase.lower().strip()
+
+    hard_block = {
+        "a", "an", "the", "to", "of", "in", "on", "at", "for",
+        "and", "or", "but", "yes", "no", "lol", "ok", "okay",
+        "hi", "hello", "thanks", "thank",
+        "black", "white", "girls", "girl", "boys", "boy",
+        "star", "stars", "weekend", "time", "home",
+    }
+
+    if phrase in hard_block:
+        return False
+
+    # Real movie titles that are also highly ambiguous English words.
+    ambiguous_movie_titles = {
+        "it", "her", "up", "us"
+    }
+
+    strong_context = {
+        "movie", "movies", "film", "films",
+        "called", "titled", "named",
+        "watch", "watched", "watching",
+        "seen", "saw",
+        "recommend", "recommended",
+    }
 
     for token in doc:
-        if token.text.lower() == phrase:
-            # 1. Capitalization check (not sentence initial)
-            if token.is_title and token.i > 0:
-                if not token.nbor(-1).is_punct:
-                    return True
+        if token.text.lower() != phrase:
+            continue
 
-            # 2. Strong context keywords nearby
-            prev_token = token.nbor(-1).text.lower() if token.i > 0 else ""
-            next_token = token.nbor(1).text.lower() if token.i < len(doc) - 1 else ""
+        nearby_tokens = [
+            doc[j].text.lower()
+            for j in range(max(0, token.i - 3),
+                           min(len(doc), token.i + 4))
+            if j != token.i
+        ]
 
-            if prev_token in strong_context or next_token in strong_context:
+        has_movie_context = any(
+            word in strong_context for word in nearby_tokens
+        )
+
+        # Titles such as "It" or "Her" must have explicit movie context.
+        if phrase in ambiguous_movie_titles:
+            if has_movie_context:
                 return True
+            continue
 
-            # 3. Stopword / Pronoun / Verb check
-            if is_stopword or token.pos_ in ["PRON", "VERB", "AUX", "DET"]:
-                continue
+        # All remaining stopwords/function words are rejected.
+        if phrase in STOP_WORDS:
+            continue
 
-            # Otherwise, it's generally safe (e.g. valid noun/name)
+        if token.pos_ in {"PRON", "VERB", "AUX", "DET", "ADP", "CCONJ"}:
+            continue
+
+        # PERSON-like words (e.g. "Amy") require movie context;
+        # otherwise they are more likely a person's name.
+        if token.ent_type_ == "PERSON":
+            if has_movie_context:
+                return True
+            continue
+
+        if has_movie_context:
+            return True
+
+        # Proper-name usage is acceptable for non-ambiguous titles.
+        if token.pos_ == "PROPN" and token.is_title:
             return True
 
     return False
+
+
+def _normalize_movie_text(text: str) -> str:
+    """Normalize text for deterministic movie-title resolution."""
+    text = text.lower()
+    text = re.sub(r"[^\w\s]", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def _resolve_ambiguous_movie_ids(title: str, ids: List[int], context: str):
+    """
+    Resolve title collisions such as remakes using an explicit year when possible.
+    Returns one entity ID or None when resolution would be unsafe.
+    """
+    if not ids:
+        return None
+
+    if len(ids) == 1:
+        return ids[0]
+
+    years = set(re.findall(r"\b(?:19|20)\d{2}\b", context))
+
+    if years:
+        year_matches = []
+        for eid in ids:
+            uri = _id2entity.get(eid, "")
+            entity_year = extract_year_from_uri(uri)
+            if entity_year and entity_year in years:
+                year_matches.append(eid)
+
+        if len(year_matches) == 1:
+            return year_matches[0]
+
+    # Do not silently choose between ambiguous remakes/entities.
+    return None
+
+
+
+def _is_safe_direct_movie_phrase(phrase: str) -> bool:
+    """
+    Reject obvious conversational phrases that happen to share a title
+    with a movie in the KBRD catalogue.
+    """
+    from spacy.lang.en.stop_words import STOP_WORDS
+
+    tokens = phrase.lower().split()
+
+    if not tokens:
+        return False
+
+    conversational_block = {
+        "are you here",
+        "how are you",
+        "what about",
+        "do you know",
+        "thank you",
+        "i know",
+        "i do",
+        "you know",
+    }
+
+    if phrase.lower() in conversational_block:
+        return False
+
+    # If a multi-word candidate consists entirely of stopwords /
+    # conversational function words, it is unsafe.
+    if len(tokens) >= 2 and all(t in STOP_WORDS for t in tokens):
+        return False
+
+    return True
+
+
+def _extract_movie_titles_v2(dialogue: str, doc):
+    """
+    Deterministic movie-title resolver used by Entity Resolver V2.
+
+    Returns:
+        movie_ids: linked KBRD movie entity IDs
+        descriptions: provenance strings for diagnostics
+    """
+    normalized = _normalize_movie_text(dialogue)
+    words = normalized.split()
+
+    found_ids = []
+    descriptions = []
+    consumed_spans = set()
+
+    # Longest titles first. ReDial/KBRD contains titles longer than 3 words,
+    # so V2 searches up to 8 tokens.
+    max_n = min(8, len(words))
+
+    for n in range(max_n, 0, -1):
+        for i in range(len(words) - n + 1):
+            span = (i, i + n)
+
+            # Avoid detecting fragments inside a title already resolved.
+            if any(i >= a and i + n <= b for a, b in consumed_spans):
+                continue
+
+            phrase = " ".join(words[i:i+n])
+
+            if n > 1 and not _is_safe_direct_movie_phrase(phrase):
+                continue
+
+            ids = _movie_title_to_ids.get(phrase)
+            if not ids:
+                continue
+
+            # One-word titles require additional contextual safety.
+            if n == 1 and not _is_valid_one_word_seed(phrase, doc):
+                continue
+
+            eid = _resolve_ambiguous_movie_ids(phrase, ids, dialogue)
+
+            if eid is None:
+                logger.debug(
+                    f"[Entity V2] Ambiguous movie title skipped: "
+                    f"{phrase!r} -> {len(ids)} entities"
+                )
+                continue
+
+            if eid not in found_ids:
+                found_ids.append(eid)
+                descriptions.append(
+                    f"'{phrase}' (V2 Direct Movie Match)"
+                )
+
+            consumed_spans.add(span)
+
+    return found_ids, descriptions
 
 
 def prepare_input(dialogue: str) -> tuple:
@@ -992,6 +1174,14 @@ def prepare_input(dialogue: str) -> tuple:
     # Step B: spaCy Extraction
     nlp = _get_spacy_nlp()
     doc = nlp(dialogue)
+
+    # Entity Resolver V2: deterministic longest-title-first movie resolution.
+    if _RESOLVER_VERSION == "v2":
+        v2_movie_ids, v2_movie_descriptions = _extract_movie_titles_v2(
+            dialogue, doc
+        )
+        seed_set.update(v2_movie_ids)
+        detected_phrases.extend(v2_movie_descriptions)
     spacy_phrases = [ent.text.lower() for ent in doc.ents]
     spacy_phrases.extend([chunk.text.lower() for chunk in doc.noun_chunks])
 
@@ -1044,11 +1234,22 @@ def prepare_input(dialogue: str) -> tuple:
 
         # Stage 1: Exact Match
         if phrase in _movie_title_to_id:
-            mid = _movie_title_to_id[phrase]
-            if mid not in seed_set:
-                seed_set.add(mid)
-                detected_phrases.append(f"'{phrase}' (Exact Movie Match)")
-            matched = True
+            if _RESOLVER_VERSION == "v2":
+                mid = _resolve_ambiguous_movie_ids(
+                    phrase,
+                    _movie_title_to_ids.get(phrase, []),
+                    dialogue,
+                )
+            else:
+                mid = _movie_title_to_id[phrase]
+
+            if mid is not None:
+                if mid not in seed_set:
+                    seed_set.add(mid)
+                    detected_phrases.append(
+                        f"'{phrase}' (Exact Movie Match)"
+                    )
+                matched = True
 
         # Stage 2: DBpedia URI Match
         if not matched:

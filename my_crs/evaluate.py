@@ -208,6 +208,7 @@ def evaluate(args):
     mlflow.log_params({
         "format": args.format,
         "dataset": args.dataset,
+        "split": args.split,
         "max_samples": args.max_samples,
         "recommendation_only": args.recommendation_only,
         "skip_reranker": args.skip_reranker,
@@ -241,9 +242,13 @@ def evaluate(args):
     skipped_conversations = 0
 
     if args.dataset == 'redial':
-        data_path = os.path.join(_PROJECT_ROOT, "baseline_repo", "KBRD_project", "KBRD",
-                                 "data", "redial", "test_data.jsonl")
+        data_path = os.path.join(
+            _PROJECT_ROOT, "baseline_repo", "KBRD_project", "KBRD",
+            "data", "redial", f"{args.split}_data.jsonl"
+        )
     else:
+        if args.split != "test":
+            raise ValueError("Only --split test is currently supported for INSPIRED.")
         data_path = os.path.join(_PROJECT_ROOT, "data", "inspired", "test_data.jsonl")
         if not os.path.exists(data_path):
             print(f"INSPIRED dataset not found at {data_path}.\nPlease download it first.")
@@ -258,7 +263,7 @@ def evaluate(args):
     else:
         mode_label = "full recommendation + response evaluation"
     print(f"\n{'='*60}")
-    print(f"EVALUATION — {args.dataset.upper()} Test Set (Turn-by-Turn)")
+    print(f"EVALUATION — {args.dataset.upper()} {args.split.upper()} Set (Turn-by-Turn)")
     print(f"Format: {args.format}")
     print(f"Max conversations: {args.max_samples}")
     print(f"Mode: {mode_label}")
@@ -584,7 +589,7 @@ def evaluate(args):
     results_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "experiments")
     os.makedirs(results_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    results_path = os.path.join(results_dir, f"eval_format{args.format}_{args.dataset}_{timestamp}.json")
+    results_path = os.path.join(results_dir, f"eval_format{args.format}_{args.dataset}_{args.split}_{timestamp}.json")
 
     fd, tmp_path = tempfile.mkstemp(dir=results_dir, suffix=".tmp")
     try:
@@ -617,7 +622,7 @@ def evaluate(args):
             retrieval_tag = "kbrd_only" if args.skip_reranker else "reranked"
         ea_dir = os.path.join(results_dir, "error_analysis")
         os.makedirs(ea_dir, exist_ok=True)
-        ea_filename = f"error_analysis_{args.dataset}_format{args.format}_{retrieval_tag}_{timestamp}.jsonl"
+        ea_filename = f"error_analysis_{args.dataset}_{args.split}_format{args.format}_{retrieval_tag}_{timestamp}.jsonl"
         ea_path = os.path.join(ea_dir, ea_filename)
         fd_ea, tmp_ea = tempfile.mkstemp(dir=ea_dir, suffix=".tmp")
         try:
@@ -637,7 +642,7 @@ def evaluate(args):
     print(f"  Skipped instances:     {skipped_instances}")
     print(f"  Reranker fallbacks:    {reranker_fallbacks}")
     print(f"{'='*60}")
-    print(f"Results saved to experiments/eval_format{args.format}_{args.dataset}_{timestamp}.json")
+    print(f"Results saved to experiments/eval_format{args.format}_{args.dataset}_{args.split}_{timestamp}.json")
     if ea_path:
         print(f"Error analysis saved to experiments/error_analysis/{ea_filename}")
     print(f"MLflow run ID: {mlflow_run.info.run_id}")
@@ -651,6 +656,8 @@ if __name__ == "__main__":
                         help="Serialization format (1-4)")
     parser.add_argument("--dataset", type=str, choices=['redial', 'inspired'], default='redial',
                         help="Dataset choice (redial or inspired)")
+    parser.add_argument("--split", type=str, choices=["train", "valid", "test"], default="test",
+                        help="Dataset split. ReDial supports train/valid/test; INSPIRED currently supports test only.")
     parser.add_argument("--max_samples", type=int, default=200,
                         help="Max conversations to process")
     parser.add_argument("--recommendation_only", action="store_true", default=False,
