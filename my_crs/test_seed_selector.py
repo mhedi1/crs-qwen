@@ -213,5 +213,43 @@ class TestAdapterIntegration(unittest.TestCase):
             self.adapter._kbrd_agent = orig_agent
             self.adapter._cfg["extraction"]["seed_selection"] = orig_cfg
 
+    def test_evaluate_diagnostics_propagation(self):
+        # We want to verify that evaluate.py properly maps diagnostic fields via its helper
+        import my_crs.evaluate as eval_module
+        
+        # 1. Test with populated diagnostics
+        populated_diag = {
+            "seed_selection_policy": "recent_5",
+            "num_seeds_before_selection": 10,
+            "num_seeds_after_selection": 5,
+            "removed_seed_ids": [1, 2],
+            "selected_movie_seed_ids": [3, 4],
+            "selected_movie_seed_positions": [100, 150]
+        }
+        
+        result = eval_module._seed_selection_error_fields(populated_diag)
+        
+        self.assertEqual(result["seed_selection_policy"], "recent_5")
+        self.assertEqual(result["num_seeds_before_selection"], 10)
+        self.assertEqual(result["num_seeds_after_selection"], 5)
+        self.assertEqual(result["removed_seed_ids"], [1, 2])
+        self.assertEqual(result["selected_movie_seed_ids"], [3, 4])
+        self.assertEqual(result["selected_movie_seed_positions"], [100, 150])
+        
+        # 2. Test with empty diagnostics (defaults)
+        empty_diag = {}
+        result_empty = eval_module._seed_selection_error_fields(empty_diag)
+        
+        self.assertEqual(result_empty["seed_selection_policy"], "all")
+        self.assertEqual(result_empty["num_seeds_before_selection"], 0)
+        self.assertEqual(result_empty["num_seeds_after_selection"], 0)
+        self.assertEqual(result_empty["removed_seed_ids"], [])
+        self.assertEqual(result_empty["selected_movie_seed_ids"], [])
+        self.assertEqual(result_empty["selected_movie_seed_positions"], [])
+        
+        # 3. Test with None
+        result_none = eval_module._seed_selection_error_fields(None)
+        self.assertEqual(result_none["seed_selection_policy"], "all")
+
 if __name__ == "__main__":
     unittest.main()

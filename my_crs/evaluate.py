@@ -28,6 +28,18 @@ from kbrd_adapter import get_kbrd_candidates
 from reranker import rerank
 from response_generator import generate_response
 
+def _seed_selection_error_fields(diag: dict) -> dict:
+    if diag is None:
+        diag = {}
+    return {
+        "seed_selection_policy": diag.get("seed_selection_policy", "all"),
+        "num_seeds_before_selection": diag.get("num_seeds_before_selection", 0),
+        "num_seeds_after_selection": diag.get("num_seeds_after_selection", 0),
+        "removed_seed_ids": diag.get("removed_seed_ids", []),
+        "selected_movie_seed_ids": diag.get("selected_movie_seed_ids", []),
+        "selected_movie_seed_positions": diag.get("selected_movie_seed_positions", []),
+    }
+
 def normalize_title(title: str) -> str:
     """Normalize title: strip year, punctuation, collapse whitespace, lowercase."""
     title = re.sub(r'\(\d{4}\)', '', title)
@@ -387,6 +399,7 @@ def evaluate(args):
                                         "num_matched_seeds": _diag.get("num_matched_seeds", 0),
                                         "num_dialogue_seed_ids": _diag.get("num_dialogue_seed_ids", 0),
                                         "num_qwen_seed_ids": _diag.get("num_qwen_seed_ids", 0),
+                                        **_seed_selection_error_fields(_diag),
                                         "dialogue_seed_entity_ids": _diag.get("dialogue_seed_entity_ids", []),
                                         "qwen_seed_entity_ids": _diag.get("qwen_seed_entity_ids", []),
                                         "qwen_fallback_titles": _diag.get("qwen_fallback_titles", []),
