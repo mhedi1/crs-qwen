@@ -1217,6 +1217,21 @@ def prepare_input(dialogue: str) -> tuple:
         if not _cfg["extraction"].get("use_legacy_non_movie_entities", True):
             return list(seed_set), detected_phrases, [], [], seed_metadata
 
+    # Component ablations apply only to the legacy auxiliary path retained by
+    # Resolver V3. Other resolver versions preserve their historical behavior.
+    use_aux_dbpedia_uri_matching = (
+        _RESOLVER_VERSION != "v3"
+        or _cfg["extraction"].get("use_aux_dbpedia_uri_matching", True)
+    )
+    use_aux_genre_mapping = (
+        _RESOLVER_VERSION != "v3"
+        or _cfg["extraction"].get("use_aux_genre_mapping", True)
+    )
+    use_aux_person_matching = (
+        _RESOLVER_VERSION != "v3"
+        or _cfg["extraction"].get("use_aux_person_matching", True)
+    )
+
     # Entity Resolver V2: deterministic longest-title-first movie resolution.
     if _RESOLVER_VERSION == "v2":
         v2_movie_ids, v2_movie_descriptions = _extract_movie_titles_v2(
@@ -1290,7 +1305,7 @@ def prepare_input(dialogue: str) -> tuple:
                 matched = True
 
         # Stage 2: DBpedia URI Match
-        if not matched:
+        if not matched and use_aux_dbpedia_uri_matching:
             capitalized = "_".join([w.capitalize() for w in phrase.split()])
             potential_uri = f"<http://dbpedia.org/resource/{capitalized}>"
             if potential_uri in _entity2id:
@@ -1352,37 +1367,39 @@ def prepare_input(dialogue: str) -> tuple:
 
     active_genres = last_turn_genres if last_turn_genres else all_genres
 
-    for word in active_genres:
-        genre_uri = f"<http://dbpedia.org/resource/{genre_map[word]}>"
-        if genre_uri in _entity2id:
-            eid = _entity2id[genre_uri]
-            _add_legacy_seed(eid, word, "Genre Mapping")
+    if use_aux_genre_mapping:
+        for word in active_genres:
+            genre_uri = f"<http://dbpedia.org/resource/{genre_map[word]}>"
+            if genre_uri in _entity2id:
+                eid = _entity2id[genre_uri]
+                _add_legacy_seed(eid, word, "Genre Mapping")
 
     # ADD BLOCK 1 â€” Person detection (actors/directors)
-    entity_map = {eid: _clean_title(uri) for eid, uri in _id2entity.items()}
-    for ent in doc.ents:
-        if ent.label_ == "PERSON":
-            person_name = ent.text.strip()
-            person_name_lower = person_name.lower()
-            best_match = None
-            best_score = 0
-            for entity_id, entity_name in entity_map.items():
-                entity_lower = entity_name.lower()
-                if person_name_lower == entity_lower:
-                    best_match = entity_id
-                    best_score = 100
-                    break
-                score = fuzz.ratio(person_name_lower,
-                                  entity_lower)
-                if score > _PERSON_MATCH_THRESH and score > best_score:
-                    best_score = score
-                    best_match = entity_id
-            if best_match is not None:
-                _add_legacy_seed(best_match, person_name, "Person Actor/Director")
-                logger.info(
-                    f"[KBRD Adapter] Person detected: "
-                    f"'{person_name}'"
-                )
+    if use_aux_person_matching:
+        entity_map = {eid: _clean_title(uri) for eid, uri in _id2entity.items()}
+        for ent in doc.ents:
+            if ent.label_ == "PERSON":
+                person_name = ent.text.strip()
+                person_name_lower = person_name.lower()
+                best_match = None
+                best_score = 0
+                for entity_id, entity_name in entity_map.items():
+                    entity_lower = entity_name.lower()
+                    if person_name_lower == entity_lower:
+                        best_match = entity_id
+                        best_score = 100
+                        break
+                    score = fuzz.ratio(person_name_lower,
+                                      entity_lower)
+                    if score > _PERSON_MATCH_THRESH and score > best_score:
+                        best_score = score
+                        best_match = entity_id
+                if best_match is not None:
+                    _add_legacy_seed(best_match, person_name, "Person Actor/Director")
+                    logger.info(
+                        f"[KBRD Adapter] Person detected: "
+                        f"'{person_name}'"
+                    )
 
     # ADD BLOCK 2 â€” Temporal clue detection
     # Detect explicit decade mentions
@@ -1436,7 +1453,7 @@ def prepare_input(dialogue: str) -> tuple:
     # Step F & G: Deduplication and Logging
     seed_list = list(seed_set)
 
-    if last_turn_genres:
+    if use_aux_genre_mapping and last_turn_genres:
         for word in last_turn_genres:
             genre_uri = f"<http://dbpedia.org/resource/{genre_map[word]}>"
             if genre_uri in _entity2id:

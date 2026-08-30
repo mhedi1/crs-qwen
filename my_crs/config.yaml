@@ -27,6 +27,9 @@ pipeline:
 extraction:
   resolver_version: "v3"
   use_legacy_non_movie_entities: true
+  use_aux_dbpedia_uri_matching: true
+  use_aux_genre_mapping: true
+  use_aux_person_matching: true
   seed_selection: "all"
   fuzzy_cutoff_entity: 0.92
   fuzzy_cutoff_title: 0.85
