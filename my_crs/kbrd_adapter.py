@@ -11,6 +11,7 @@ import warnings
 import yaml
 from rapidfuzz import fuzz
 from reranker import call_qwen
+from my_crs import movie_catalogue
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -462,19 +463,20 @@ def _seed_id_to_movie_candidate(seed_id: int, source_label: str) -> dict:
     if _movie_ids is None or seed_id not in _movie_ids:
         return None
 
-    entity_uri = _id2entity.get(seed_id)
-    if not entity_uri:
-        return None
-
-    title = _clean_title(entity_uri)
+    # New unified title lookup (fixes 812 URI-less movies bug)
+    title = movie_catalogue.get_title(seed_id)
+    
     # Gate 2: title must be non-trivial and pass the validity filter.
     if not title or title.strip().isdigit() or len(title.strip()) < 2:
+        return None
+    if title == "Unknown Title":
         return None
     if not _is_valid_movie_title(title):
         return None
 
-    year = _extract_year(entity_uri)
-    uri_string = entity_uri  # already the full URI string
+    entity_uri = _id2entity.get(seed_id)
+    year = _extract_year(entity_uri) if entity_uri else ""
+    uri_string = str(entity_uri) if entity_uri else ""
     c = {
         "id": int(seed_id),
         "title": title,
@@ -698,19 +700,23 @@ def get_kbrd_candidates(
             break
 
         movie_id = movie_ids[idx]
-        entity_uri = _id2entity.get(movie_id)
-        if not entity_uri:
-            continue
-
-        title = _clean_title(entity_uri)
+        
+        # New unified title lookup (fixes 812 URI-less movies bug)
+        title = movie_catalogue.get_title(movie_id)
+        
         if not title or title.strip().isdigit() or len(title.strip()) < 2:
+            continue
+            
+        if title == "Unknown Title":
             continue
 
         if not _is_valid_movie_title(title):
             continue
 
-        year = _extract_year(entity_uri)
-        uri_string = _id2entity.get(movie_id, '')
+        # Preserve legacy URI lookup for year extraction and genre inference
+        entity_uri = _id2entity.get(movie_id)
+        year = _extract_year(entity_uri) if entity_uri else ""
+        uri_string = str(entity_uri) if entity_uri else ""
         c = {
             "id": int(movie_id),
             "title": title,
