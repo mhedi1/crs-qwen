@@ -27,6 +27,7 @@ pipeline:
 extraction:
   resolver_version: "v3"
   use_legacy_non_movie_entities: true
+  seed_selection: "all"
   fuzzy_cutoff_entity: 0.92
   fuzzy_cutoff_title: 0.85
   person_match_threshold: 85

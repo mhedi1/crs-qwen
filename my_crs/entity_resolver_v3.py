@@ -37,11 +37,49 @@ class ResolverV3:
         t = re.sub(r'[^\w\s]', '', text.lower())
         return re.sub(r'\s+', ' ', t).strip()
 
-    def resolve_mentions(self, dialogue: str, doc) -> Tuple[List[int], List[str]]:
-        norm_dialogue = self._normalize_title(dialogue)
+    def _normalize_dialogue_with_map(self, text: str) -> Tuple[str, List[int]]:
+        t_lower = text.lower()
+        norm_chars = []
+        idx_map = []
+        
+        for i, c in enumerate(t_lower):
+            if re.match(r'[\w\s]', c):
+                norm_chars.append(c)
+                idx_map.append(i)
+                
+        temp_str = ''.join(norm_chars)
+        final_chars = []
+        final_map = []
+        in_space = False
+        
+        for i, c in enumerate(temp_str):
+            if c.isspace():
+                if not in_space:
+                    final_chars.append(' ')
+                    final_map.append(idx_map[i])
+                    in_space = True
+            else:
+                final_chars.append(c)
+                final_map.append(idx_map[i])
+                in_space = False
+                
+        # Strip trailing space if any
+        if final_chars and final_chars[-1] == ' ':
+            final_chars.pop()
+            final_map.pop()
+        # Strip leading space if any
+        if final_chars and final_chars[0] == ' ':
+            final_chars.pop(0)
+            final_map.pop(0)
+            
+        return ''.join(final_chars), final_map
+
+    def resolve_mentions(self, dialogue: str, doc) -> Tuple[List[int], List[str], List[Dict[str, Any]]]:
+        norm_dialogue, idx_map = self._normalize_dialogue_with_map(dialogue)
         
         found_entity_ids = []
         found_descriptions = []
+        found_metadata = []
         matched_spans = []
         
         for norm_title in self._sorted_titles:
@@ -72,7 +110,20 @@ class ResolverV3:
                 prov_tag = f"[V3: {resolution_reason}] {best_candidate['original_title']}"
                 found_descriptions.append(prov_tag)
                 
-        return found_entity_ids, found_descriptions
+                # Retrieve actual exact character match from dialogue using the map
+                orig_start = idx_map[start]
+                orig_end = idx_map[end - 1] + 1
+                surface_text = dialogue[orig_start:orig_end]
+                
+                found_metadata.append({
+                    "entity_id": best_candidate["entity_id"],
+                    "surface_text": surface_text,
+                    "start_char": orig_start,
+                    "end_char": orig_end,
+                    "provenance": prov_tag
+                })
+                
+        return found_entity_ids, found_descriptions, found_metadata
 
     def _passes_structural_filter(self, norm_title: str, doc) -> bool:
         words = norm_title.split()

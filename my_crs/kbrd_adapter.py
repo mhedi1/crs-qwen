@@ -594,7 +594,14 @@ def get_kbrd_candidates(
             })
         return get_fallback_candidates(top_k), []
 
-    seed_list, detected_decades, detected_phrases, filtered_1grams = prepare_input(dialogue)
+    seed_list, detected_decades, detected_phrases, filtered_1grams, seed_metadata = prepare_input(dialogue)
+    
+    import my_crs.seed_selector as seed_selector
+    policy = _cfg["extraction"].get("seed_selection", "all")
+    seed_list, removed_seed_ids, sel_diags = seed_selector.apply_selection(
+        dialogue, seed_list, seed_metadata, policy, _movie_ids
+    )
+    
     dialogue_seed_ids = list(seed_list)
 
     _seeds_before_fallback = len(dialogue_seed_ids)
@@ -920,7 +927,8 @@ def get_kbrd_candidates(
             "fused_candidate_titles": fused_titles,
             "candidate_sources": candidate_sources,
         })
-
+        diagnostics.update(sel_diags)
+        
     return final_candidates, detected_decades
 
 
@@ -1176,6 +1184,20 @@ def prepare_input(dialogue: str) -> tuple:
 
     seed_set = set()
     detected_phrases = []
+    seed_metadata = []
+    
+    def _add_legacy_seed(eid: int, phrase: str, prov_tag: str):
+        if eid not in seed_set:
+            seed_set.add(eid)
+            detected_phrases.append(f"'{phrase}' ({prov_tag})")
+            pos = dialogue.lower().rfind(phrase.lower())
+            seed_metadata.append({
+                "entity_id": eid,
+                "surface_text": phrase,
+                "start_char": pos,
+                "end_char": pos + len(phrase) if pos != -1 else -1,
+                "provenance": prov_tag
+            })
 
     # Step B: spaCy Extraction
     nlp = _get_spacy_nlp()
@@ -1184,14 +1206,15 @@ def prepare_input(dialogue: str) -> tuple:
     # Entity Resolver V3
     if _RESOLVER_VERSION == "v3":
         import my_crs.entity_resolver_v3 as entity_resolver_v3
-        v3_movie_ids, v3_movie_descriptions = entity_resolver_v3.resolve_mentions(
+        v3_movie_ids, v3_movie_descriptions, v3_metadata = entity_resolver_v3.resolve_mentions(
             dialogue, doc
         )
         seed_set.update(v3_movie_ids)
         detected_phrases.extend(v3_movie_descriptions)
+        seed_metadata.extend(v3_metadata)
         
         if not _cfg["extraction"].get("use_legacy_non_movie_entities", True):
-            return list(seed_set), detected_phrases, [], []
+            return list(seed_set), detected_phrases, [], [], seed_metadata
 
     # Entity Resolver V2: deterministic longest-title-first movie resolution.
     if _RESOLVER_VERSION == "v2":
@@ -1262,11 +1285,7 @@ def prepare_input(dialogue: str) -> tuple:
                 mid = _movie_title_to_id[phrase]
 
             if mid is not None:
-                if mid not in seed_set:
-                    seed_set.add(mid)
-                    detected_phrases.append(
-                        f"'{phrase}' (Exact Movie Match)"
-                    )
+                _add_legacy_seed(mid, phrase, "Exact Movie Match")
                 matched = True
 
         # Stage 2: DBpedia URI Match
@@ -1275,9 +1294,7 @@ def prepare_input(dialogue: str) -> tuple:
             potential_uri = f"<http://dbpedia.org/resource/{capitalized}>"
             if potential_uri in _entity2id:
                 eid = _entity2id[potential_uri]
-                if eid not in seed_set:
-                    seed_set.add(eid)
-                    detected_phrases.append(f"'{phrase}' (DBpedia URI Match)")
+                _add_legacy_seed(eid, phrase, "DBpedia URI Match")
                 matched = True
 
         if not matched:
@@ -1297,9 +1314,7 @@ def prepare_input(dialogue: str) -> tuple:
             if matches:
                 matched_title = matches[0]
                 mid = _movie_title_to_id[matched_title]
-                if mid not in seed_set:
-                    seed_set.add(mid)
-                    detected_phrases.append(f"'{phrase}' (Fuzzy Movie Match)")
+                _add_legacy_seed(mid, phrase, "Fuzzy Movie Match")
 
     # Get last user turn text
     last_turn_idx = dialogue.rfind("User: ")
@@ -1340,9 +1355,7 @@ def prepare_input(dialogue: str) -> tuple:
         genre_uri = f"<http://dbpedia.org/resource/{genre_map[word]}>"
         if genre_uri in _entity2id:
             eid = _entity2id[genre_uri]
-            if eid not in seed_set:
-                seed_set.add(eid)
-                detected_phrases.append(f"'{word}' (Genre Mapping)")
+            _add_legacy_seed(eid, word, "Genre Mapping")
 
     # ADD BLOCK 1 â€” Person detection (actors/directors)
     entity_map = {eid: _clean_title(uri) for eid, uri in _id2entity.items()}
@@ -1364,8 +1377,7 @@ def prepare_input(dialogue: str) -> tuple:
                     best_score = score
                     best_match = entity_id
             if best_match is not None:
-                seed_set.add(best_match)
-                detected_phrases.append(f"'{person_name}' (Person Actor/Director)")
+                _add_legacy_seed(best_match, person_name, "Person Actor/Director")
                 logger.info(
                     f"[KBRD Adapter] Person detected: "
                     f"'{person_name}'"
@@ -1440,4 +1452,4 @@ def prepare_input(dialogue: str) -> tuple:
         if filtered_1grams:
             logger.debug(f"[KBRD Adapter] Filtered noisy 1-grams: {filtered_1grams}")
 
-    return seed_list, detected_decades, detected_phrases, filtered_1grams
+    return seed_list, detected_decades, detected_phrases, filtered_1grams, seed_metadata
