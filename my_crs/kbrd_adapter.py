@@ -1181,6 +1181,18 @@ def prepare_input(dialogue: str) -> tuple:
     nlp = _get_spacy_nlp()
     doc = nlp(dialogue)
 
+    # Entity Resolver V3
+    if _RESOLVER_VERSION == "v3":
+        import my_crs.entity_resolver_v3 as entity_resolver_v3
+        v3_movie_ids, v3_movie_descriptions = entity_resolver_v3.resolve_mentions(
+            dialogue, doc
+        )
+        seed_set.update(v3_movie_ids)
+        detected_phrases.extend(v3_movie_descriptions)
+        
+        if not _cfg["extraction"].get("use_legacy_non_movie_entities", True):
+            return list(seed_set), detected_phrases, [], []
+
     # Entity Resolver V2: deterministic longest-title-first movie resolution.
     if _RESOLVER_VERSION == "v2":
         v2_movie_ids, v2_movie_descriptions = _extract_movie_titles_v2(
@@ -1238,8 +1250,8 @@ def prepare_input(dialogue: str) -> tuple:
 
         matched = False
 
-        # Stage 1: Exact Match
-        if phrase in _movie_title_to_id:
+        # Stage 1: Exact Match (Skipped in V3)
+        if _RESOLVER_VERSION != "v3" and phrase in _movie_title_to_id:
             if _RESOLVER_VERSION == "v2":
                 mid = _resolve_ambiguous_movie_ids(
                     phrase,
@@ -1271,22 +1283,23 @@ def prepare_input(dialogue: str) -> tuple:
         if not matched:
             unmatched_phrases.append(phrase)
 
-    # Stage 3: Fuzzy Matching on unmatched phrases (length >= 6)
+    # Stage 3: Fuzzy Matching on unmatched phrases (length >= 6) (Skipped in V3)
     long_unmatched = [p for p in unmatched_phrases if len(p) >= 6]
     movie_titles = list(_movie_title_to_id.keys())
 
-    for phrase in long_unmatched:
-        # Prevent redundant fuzzy matching if an exact match already snagged this concept
-        if any(phrase in dp for dp in detected_phrases):
-            continue
-
-        matches = difflib.get_close_matches(phrase, movie_titles, n=3, cutoff=_FUZZY_CUTOFF_ENTITY)
-        if matches:
-            matched_title = matches[0]
-            mid = _movie_title_to_id[matched_title]
-            if mid not in seed_set:
-                seed_set.add(mid)
-                detected_phrases.append(f"'{phrase}' -> '{matched_title}' (Fuzzy Movie Match)")
+    if _RESOLVER_VERSION != "v3":
+        for phrase in long_unmatched:
+            # Prevent redundant fuzzy matching if an exact match already snagged this concept
+            if any(phrase in dp for dp in detected_phrases):
+                continue
+                
+            matches = difflib.get_close_matches(phrase, movie_titles, n=3, cutoff=_FUZZY_CUTOFF_ENTITY)
+            if matches:
+                matched_title = matches[0]
+                mid = _movie_title_to_id[matched_title]
+                if mid not in seed_set:
+                    seed_set.add(mid)
+                    detected_phrases.append(f"'{phrase}' (Fuzzy Movie Match)")
 
     # Get last user turn text
     last_turn_idx = dialogue.rfind("User: ")
