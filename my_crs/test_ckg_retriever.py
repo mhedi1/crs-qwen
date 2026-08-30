@@ -6,7 +6,7 @@ import tempfile
 import types
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import my_crs
 
@@ -384,6 +384,7 @@ class TestCKGRetriever(unittest.TestCase):
                 "extraction": {
                     "resolver_version": "v3",
                     "use_legacy_non_movie_entities": True,
+                    "use_aux_person_matching": False,
                     "seed_selection": "all",
                 }
             }
@@ -426,6 +427,11 @@ class TestCKGRetriever(unittest.TestCase):
             self.assertFalse(result["ckg_loaded"])
             self.assertFalse(result["ckg_retrieved"])
             self.assertTrue(result["tmdb_cache_isolated"])
+            self.assertTrue(
+                result["configuration"]["use_aux_dbpedia_uri_matching"]
+            )
+            self.assertTrue(result["configuration"]["use_aux_genre_mapping"])
+            self.assertFalse(result["configuration"]["use_aux_person_matching"])
             self.assertEqual(original_tmdb_cache.read_text(encoding="utf-8"), "preserve-me")
             self.assertEqual(fake_adapter._TMDB_CACHE_PATH, str(original_tmdb_cache))
             self.assertEqual(
@@ -437,6 +443,72 @@ class TestCKGRetriever(unittest.TestCase):
                     "retrieval_mode": "kbrd",
                 },
             )
+
+    def test_evaluate_valid_records_extraction_configuration_without_retrieval(self):
+        fake_evaluator = types.ModuleType("my_crs.evaluate")
+        fake_evaluator._cfg = {
+            "extraction": {
+                "resolver_version": "v3",
+                "use_legacy_non_movie_entities": True,
+                "use_aux_person_matching": False,
+                "seed_selection": "all",
+            }
+        }
+        fake_kbrd_adapter = types.ModuleType("kbrd_adapter")
+        fake_movie_catalogue = types.ModuleType("my_crs.movie_catalogue")
+        fake_movie_catalogue.load_catalogue = Mock()
+        fake_movie_catalogue.get_title = Mock(return_value=None)
+        retriever = Mock()
+        retriever.metadata = {}
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            valid_path = root / "valid_data.jsonl"
+            valid_path.write_text("", encoding="utf-8")
+            output_path = root / "result.json"
+            instance_output_path = root / "result.instances.jsonl"
+
+            with patch.dict(
+                sys.modules,
+                {
+                    "my_crs.evaluate": fake_evaluator,
+                    "kbrd_adapter": fake_kbrd_adapter,
+                    "my_crs.movie_catalogue": fake_movie_catalogue,
+                },
+            ), patch.object(
+                my_crs, "evaluate", fake_evaluator, create=True
+            ), patch.object(
+                my_crs, "movie_catalogue", fake_movie_catalogue, create=True
+            ), patch(
+                "my_crs.evaluate_ckg_complementarity.require_passing_parity_report",
+                return_value={},
+            ), patch.object(
+                CKGRetriever, "load", return_value=retriever
+            ) as load_mock:
+                result = evaluate_valid(
+                    valid_path=valid_path,
+                    cache_dir=root / "cache",
+                    output_path=output_path,
+                    instance_output_path=instance_output_path,
+                    parity_report_path=root / "parity.json",
+                )
+
+        self.assertEqual(
+            result["extraction_configuration"],
+            {
+                "resolver_version": "v3",
+                "use_legacy_non_movie_entities": True,
+                "use_aux_dbpedia_uri_matching": True,
+                "use_aux_genre_mapping": True,
+                "use_aux_person_matching": False,
+                "seed_selection": "all",
+            },
+        )
+        self.assertEqual(load_mock.call_count, 4)
+        retriever.retrieve_views.assert_not_called()
+        self.assertEqual(result["input_conversations_seen"], 0)
+        self.assertEqual(result["evaluation_instances"], 0)
+        self.assertEqual(len(result["configurations"]), 4)
 
     def test_normalized_title_scoring_matches_frozen_evaluator(self):
         candidates = [{"id": 1, "title": "The Matrix (1999)"}]

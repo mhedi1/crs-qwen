@@ -101,6 +101,18 @@ def pre_fill_bucket(candidate_count: int) -> str:
     return "50"
 
 
+def extraction_configuration(config: Mapping[str, Any]) -> dict[str, Any]:
+    extraction = config["extraction"]
+    return {
+        "resolver_version": extraction.get("resolver_version"),
+        "use_legacy_non_movie_entities": extraction.get("use_legacy_non_movie_entities"),
+        "use_aux_dbpedia_uri_matching": extraction.get("use_aux_dbpedia_uri_matching", True),
+        "use_aux_genre_mapping": extraction.get("use_aux_genre_mapping", True),
+        "use_aux_person_matching": extraction.get("use_aux_person_matching", True),
+        "seed_selection": extraction.get("seed_selection"),
+    }
+
+
 class MetricAccumulator:
     """Primary normalized-title metrics plus KBRD complementarity counts."""
 
@@ -300,13 +312,8 @@ def run_kbrd_parity(
 
     frozen_adapter = sys.modules.get(frozen_evaluator.get_kbrd_candidates.__module__)
 
-    config = frozen_evaluator._cfg
     frozen_config = {
-        "resolver_version": config["extraction"].get("resolver_version"),
-        "use_legacy_non_movie_entities": config["extraction"].get(
-            "use_legacy_non_movie_entities"
-        ),
-        "seed_selection": config["extraction"].get("seed_selection"),
+        **extraction_configuration(frozen_evaluator._cfg),
         "retrieval_mode": "kbrd",
         "top_k": 50,
         "skip_reranker": True,
@@ -674,6 +681,7 @@ def evaluate_valid(
         "primary_scoring": "frozen normalized-title semantics",
         "kbrd_baseline": "pure KBRD@50 (retrieval_mode=kbrd, fusion disabled)",
         "fusion_implemented": False,
+        "extraction_configuration": extraction_configuration(frozen_evaluator._cfg),
         "configurations": configurations,
         "instance_provenance_path": str(Path(instance_output_path).resolve()),
         "failures": failures,
