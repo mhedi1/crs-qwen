@@ -601,6 +601,8 @@ def get_kbrd_candidates(
     seed_list, removed_seed_ids, sel_diags = seed_selector.apply_selection(
         dialogue, seed_list, seed_metadata, policy, _movie_ids
     )
+    if diagnostics is not None:
+        diagnostics.update(sel_diags)
     
     dialogue_seed_ids = list(seed_list)
 
@@ -927,7 +929,6 @@ def get_kbrd_candidates(
             "fused_candidate_titles": fused_titles,
             "candidate_sources": candidate_sources,
         })
-        diagnostics.update(sel_diags)
         
     return final_candidates, detected_decades
 

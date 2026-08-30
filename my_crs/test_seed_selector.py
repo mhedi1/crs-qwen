@@ -251,5 +251,62 @@ class TestAdapterIntegration(unittest.TestCase):
         result_none = eval_module._seed_selection_error_fields(None)
         self.assertEqual(result_none["seed_selection_policy"], "all")
 
+    def test_early_return_diagnostics_kbrd_mode(self):
+        # We need to test if get_kbrd_candidates correctly includes sel_diags
+        # even when retrieval_mode="kbrd" early-returns.
+        orig_data_loaded = self.adapter._data_loaded
+        orig_agent = self.adapter._kbrd_agent
+        orig_cfg = self.adapter._cfg["extraction"]["seed_selection"]
+        
+        class DummyModel:
+            def eval(self): pass
+            def __call__(self, *args, **kwargs):
+                import torch
+                return {"scores": torch.zeros((1, max(self.movie_ids) + 1 if self.movie_ids else 1000))}
+                
+        class DummyAgent:
+            def __init__(self, movie_ids):
+                self.movie_ids = movie_ids
+                self.model = DummyModel()
+                self.model.movie_ids = movie_ids
+                
+        self.adapter._data_loaded = True
+        self.adapter._has_error = False
+        # Limit movie pool
+        self.adapter._kbrd_agent = DummyAgent(list(self.adapter._movie_ids)[:100])
+        self.adapter._cfg["extraction"]["seed_selection"] = "recent_3"
+        
+        try:
+            diagnostics = {}
+            # Pass a dialogue with >3 movies to trigger recent_3 removals
+            dialogue = "I saw movie1 and movie2 and movie3 and movie4"
+            # To ensure they are recognized, we need actual movies from the catalogue.
+            # Let's mock the seed list instead, or just use real movies.
+            import my_crs.movie_catalogue as mc
+            # Assuming movie 110, 111, 112, 113 exist. We will just use whatever is in self.adapter._movie_ids
+            some_movies = list(self.adapter._movie_ids)[:4]
+            if len(some_movies) >= 4:
+                titles = [mc.get_title(m) for m in some_movies]
+                dialogue = " and ".join(titles)
+            
+            self.adapter.get_kbrd_candidates(dialogue, top_k=5, diagnostics=diagnostics, retrieval_mode="kbrd")
+            
+            # Verify that seed_selection diagnostics are present despite the early return
+            self.assertIn("seed_selection_policy", diagnostics)
+            self.assertEqual(diagnostics["seed_selection_policy"], "recent_3")
+            self.assertIn("num_seeds_before_selection", diagnostics)
+            self.assertIn("num_seeds_after_selection", diagnostics)
+            self.assertIn("removed_seed_ids", diagnostics)
+            
+            # Since we passed >= 4 movies, recent_3 should have dropped at least 1
+            if len(some_movies) >= 4 and diagnostics["num_seeds_before_selection"] >= 4:
+                self.assertGreater(diagnostics["num_seeds_before_selection"], diagnostics["num_seeds_after_selection"])
+                self.assertGreater(len(diagnostics["removed_seed_ids"]), 0)
+            
+        finally:
+            self.adapter._data_loaded = orig_data_loaded
+            self.adapter._kbrd_agent = orig_agent
+            self.adapter._cfg["extraction"]["seed_selection"] = orig_cfg
+
 if __name__ == "__main__":
     unittest.main()
