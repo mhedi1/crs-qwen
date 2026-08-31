@@ -93,9 +93,9 @@ DEFAULT_MOVIE_CATALOGUE_PATH = (
 ).resolve()
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "experiments" / "rrf_train_peft"
 
-AUDIT_SCHEMA_VERSION = "rrf_train_audit_v1"
+AUDIT_SCHEMA_VERSION = "rrf_train_audit_v2"
 SFT_SCHEMA_VERSION = "rrf_train_sft_v1"
-SUMMARY_SCHEMA_VERSION = "rrf_train_summary_v1"
+SUMMARY_SCHEMA_VERSION = "rrf_train_summary_v2"
 RUN_SCHEMA_VERSION = "rrf_train_run_v1"
 TARGET_CONSTRUCTION_VERSION = "positive_first_rrf_stable_top10_v1"
 SPLIT_VERSION = "stage2_peft_split_v1"
@@ -108,6 +108,10 @@ AUDIT_FILENAME = "train_rrf_candidates.audit.jsonl"
 SFT_FILENAME = "train_rrf_sft.jsonl"
 SUMMARY_FILENAME = "train_rrf_dataset.summary.json"
 RUN_FILENAME = "train_rrf_dataset.run.json"
+
+KBRD_FALLBACK_NO_INFERENCE_SEEDS = "no_inference_seeds"
+KBRD_FALLBACK_POLICY_VERSION = "kbrd_fallback_no_seed_exclusion_v1"
+EXCLUSION_NO_NEURAL_KBRD_SEEDS = "no_neural_kbrd_inference_seeds"
 
 EXPECTED_EXTRACTION_CONFIGURATION = {
     "resolver_version": "v3",
@@ -442,6 +446,17 @@ def _validate_neural_kbrd_candidates(
         raise RuntimeError("KBRD static/debug fallback detected; aborting TRAIN artifact build")
 
 
+def _diagnostics_confirm_no_inference_seeds(
+    diagnostics: Mapping[str, Any],
+) -> bool:
+    return (
+        diagnostics.get("seed_entity_ids") == []
+        and diagnostics.get("dialogue_seed_entity_ids") == []
+        and diagnostics.get("qwen_seed_entity_ids") == []
+        and diagnostics.get("num_matched_seeds") == 0
+    )
+
+
 def _hash_checkpoint_bundle(path: Path) -> tuple[str, list[str]]:
     path = path.resolve()
     if not path.exists():
@@ -613,6 +628,50 @@ def _event_record(
         use_fusion=False,
         retrieval_mode="kbrd",
     )
+    fallback_reason = kbrd_diagnostics.get("fallback_reason")
+    if fallback_reason == KBRD_FALLBACK_NO_INFERENCE_SEEDS:
+        if not _diagnostics_confirm_no_inference_seeds(kbrd_diagnostics):
+            raise RuntimeError(
+                "KBRD no_inference_seeds diagnostics contradict inference seed IDs"
+            )
+        normalized_ground_truth = sorted(
+            {normalize_title(title) for title in event.ground_truth_titles}
+        )
+        return {
+            "schema_version": AUDIT_SCHEMA_VERSION,
+            "run_fingerprint": run_fingerprint,
+            "instance_key": event.key,
+            "source_split": "TRAIN",
+            "line_number": event.line_number,
+            "conversation_id": event.conversation_id,
+            "turn_index": event.turn_index,
+            "history": history,
+            "history_sha256": hashlib.sha256(history.encode("utf-8")).hexdigest(),
+            "ground_truth_titles": list(event.ground_truth_titles),
+            "normalized_ground_truth_titles": normalized_ground_truth,
+            "unique_annotated_target_count": len(event.unique_target_ids),
+            "kbrd_top50": [],
+            "loo_ckg_top50": [],
+            "rrf_top50": [],
+            "positive_positions": [],
+            "positive_positions_truncated": False,
+            "target_positions": [],
+            "eligible": False,
+            "exclusion_reason": EXCLUSION_NO_NEURAL_KBRD_SEEDS,
+            "assistant_target": None,
+            "candidate_digest": None,
+            "conversation_key": contribution.conversation_key,
+            "conversation_contribution_digest": contribution.digest,
+            "split": split,
+            "diagnostics": {
+                "all_extracted_entity_ids": all_extracted_entity_ids,
+                "kbrd": kbrd_diagnostics,
+                "loo_ckg": None,
+            },
+            "failures": [],
+        }
+    if fallback_reason is not None:
+        raise RuntimeError(f"Fatal KBRD fallback: {fallback_reason}")
     _validate_neural_kbrd_candidates(
         kbrd_candidates, loo_view.retriever.movie_ids
     )
@@ -725,6 +784,30 @@ def _validate_resume_record(
     history = str(record.get("history", ""))
     if record.get("history_sha256") != hashlib.sha256(history.encode("utf-8")).hexdigest():
         raise ValueError("Resume history digest mismatch")
+    if record.get("exclusion_reason") == EXCLUSION_NO_NEURAL_KBRD_SEEDS:
+        diagnostics = record.get("diagnostics")
+        kbrd_diagnostics = (
+            diagnostics.get("kbrd") if isinstance(diagnostics, Mapping) else None
+        )
+        if (
+            record.get("eligible") is not False
+            or record.get("assistant_target") is not None
+            or record.get("target_positions") != []
+            or record.get("positive_positions") != []
+            or record.get("positive_positions_truncated") is not False
+            or record.get("kbrd_top50") != []
+            or record.get("loo_ckg_top50") != []
+            or record.get("rrf_top50") != []
+            or record.get("candidate_digest") is not None
+            or record.get("failures") != []
+            or not isinstance(kbrd_diagnostics, Mapping)
+            or kbrd_diagnostics.get("fallback_reason")
+            != KBRD_FALLBACK_NO_INFERENCE_SEEDS
+            or not _diagnostics_confirm_no_inference_seeds(kbrd_diagnostics)
+            or diagnostics.get("loo_ckg") is not None
+        ):
+            raise ValueError("Resume no-inference-seed exclusion provenance mismatch")
+        return
     candidates = record.get("rrf_top50")
     if not isinstance(candidates, list) or len(candidates) != TOP_K:
         raise ValueError("Resume RRF candidate list is incomplete")
@@ -816,6 +899,16 @@ def _summary(
     token_lengths: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     eligible = [record for record in records if record["eligible"]]
+    exclusion_reasons = Counter(
+        str(record["exclusion_reason"])
+        for record in records
+        if not record["eligible"]
+    )
+    retrieval_records = [
+        record
+        for record in records
+        if record.get("exclusion_reason") != EXCLUSION_NO_NEURAL_KBRD_SEEDS
+    ]
     first_positive_ranks = Counter(
         str(record["positive_positions"][0]) for record in eligible
     )
@@ -828,7 +921,7 @@ def _summary(
     kbrd_only = 0
     ckg_only = 0
     neither = 0
-    for record in records:
+    for record in retrieval_records:
         ground_truth = record["ground_truth_titles"]
         kbrd_hit = bool(positive_candidate_positions(record["kbrd_top50"], ground_truth))
         ckg_hit = bool(positive_candidate_positions(record["loo_ckg_top50"], ground_truth))
@@ -864,9 +957,17 @@ def _summary(
             "eligible": len(eligible),
             "excluded": len(records) - len(eligible),
             "eligible_percentage": 100.0 * len(eligible) / len(records) if records else 0.0,
+            "eligible_percentage_of_retrieval_completed": (
+                100.0 * len(eligible) / len(retrieval_records)
+                if retrieval_records
+                else 0.0
+            ),
             "eligible_conversations": len(
                 {record["conversation_key"] for record in eligible}
             ),
+            "retrieval_completed_instances": len(retrieval_records),
+            "retrieval_not_run_instances": len(records) - len(retrieval_records),
+            "excluded_by_reason": dict(sorted(exclusion_reasons.items())),
             "positive_positions_truncated": sum(
                 bool(record["positive_positions_truncated"]) for record in records
             ),
@@ -876,6 +977,7 @@ def _summary(
         "first_positive_rank_distribution": dict(sorted(first_positive_ranks.items(), key=lambda x: int(x[0]))),
         "target_multiplicity": dict(sorted(target_multiplicity.items(), key=lambda x: int(x[0]))),
         "reachability": {
+            "evaluated_instances": len(retrieval_records),
             "KBRD_Top50": kbrd_hits,
             "LOO_CKG_Top50": ckg_hits,
             "RRF_Top50": len(eligible),
@@ -1021,6 +1123,8 @@ def build_rrf_train_dataset(
             "use_fusion": False,
             "top_k": TOP_K,
             "llm_used": False,
+            "fallback_policy_version": KBRD_FALLBACK_POLICY_VERSION,
+            "nonfatal_fallback_reasons": [KBRD_FALLBACK_NO_INFERENCE_SEEDS],
         },
         "ckg": {
             "global_count_path": str(count_file),

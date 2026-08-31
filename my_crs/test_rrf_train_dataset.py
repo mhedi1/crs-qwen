@@ -2,9 +2,11 @@ import copy
 import hashlib
 import json
 import pickle
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import yaml
@@ -12,9 +14,13 @@ import yaml
 from my_crs.build_rrf_train_dataset import (
     AUDIT_FILENAME,
     CONTRIBUTIONS_FILENAME,
+    EXCLUSION_NO_NEURAL_KBRD_SEEDS,
     EXPECTED_TRAIN_SHA256,
     EXPECTED_EXTRACTION_CONFIGURATION,
+    KBRD_FALLBACK_NO_INFERENCE_SEEDS,
+    KBRD_FALLBACK_POLICY_VERSION,
     OFFICIAL_TRAIN_PATH,
+    RUN_FILENAME,
     SFT_FILENAME,
     ReconstructionExpectations,
     _sha256,
@@ -32,6 +38,7 @@ from my_crs.build_rrf_train_dataset import (
 )
 from my_crs.ckg_retriever import ReDialKBRDMapping, build_count_data
 from my_crs.evaluate_rrf_fusion import reciprocal_rank_fusion as frozen_rrf
+from my_crs.loo_ckg_retriever import canonical_json_digest
 from my_crs.rrf_list_reranker import parse_ranked_positions
 
 
@@ -171,6 +178,18 @@ class TestEligibilityAndTarget(unittest.TestCase):
         ]
         with self.assertRaisesRegex(RuntimeError, "fallback"):
             _validate_neural_kbrd_candidates(wrong_source, movie_ids)
+        too_short = [
+            {"id": value, "title": str(value), "source": "KBRD_NEURAL"}
+            for value in range(1, 50)
+        ]
+        with self.assertRaisesRegex(RuntimeError, "exactly 50"):
+            _validate_neural_kbrd_candidates(too_short, movie_ids)
+        duplicate = [
+            {"id": value, "title": str(value), "source": "KBRD_NEURAL"}
+            for value in [*range(1, 50), 1]
+        ]
+        with self.assertRaisesRegex(RuntimeError, "duplicate"):
+            _validate_neural_kbrd_candidates(duplicate, movie_ids)
 
     def test_only_retrained_checkpoint_is_accepted(self):
         _validate_kbrd_checkpoint_selection(
@@ -236,6 +255,116 @@ class TestSplitAndTokenAccounting(unittest.TestCase):
             )
 
 
+class _FakeKBRDModel:
+    def eval(self):
+        return None
+
+    def __call__(self, seed_sets, labels):
+        import torch
+
+        return {"scores": torch.arange(256, dtype=torch.float).unsqueeze(0)}
+
+
+class TestKBRDFallbackDiagnostics(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        module_dir = str(Path(__file__).resolve().parent)
+        if module_dir not in sys.path:
+            sys.path.insert(0, module_dir)
+        import kbrd_adapter
+
+        cls.adapter = kbrd_adapter
+
+    def test_model_and_seed_fallback_reasons_are_explicit(self):
+        for expected, state in (
+            ("model_or_resources_unavailable", "unavailable"),
+            (KBRD_FALLBACK_NO_INFERENCE_SEEDS, "no-seeds"),
+        ):
+            with self.subTest(expected=expected):
+                diagnostics = {"fallback_reason": "stale"}
+                agent = None if state == "unavailable" else SimpleNamespace()
+                with patch.object(self.adapter, "_load_kbrd_resources"), patch.object(
+                    self.adapter, "_load_kbrd_model"
+                ), patch.object(
+                    self.adapter, "_has_error", state == "unavailable"
+                ), patch.object(
+                    self.adapter, "_data_loaded", state != "unavailable"
+                ), patch.object(
+                    self.adapter, "_kbrd_agent", agent
+                ), patch.object(
+                    self.adapter, "_movie_ids", frozenset()
+                ), patch.object(
+                    self.adapter,
+                    "prepare_input",
+                    return_value=([], [], [], [], []),
+                ):
+                    self.adapter.get_kbrd_candidates(
+                        "User: no movie entities",
+                        top_k=50,
+                        diagnostics=diagnostics,
+                        use_fusion=False,
+                        retrieval_mode="kbrd",
+                    )
+                self.assertEqual(diagnostics["fallback_reason"], expected)
+
+    def _run_neural_path(self, title_lookup):
+        movie_ids = list(range(101, 151))
+        agent = SimpleNamespace(
+            use_cuda=False,
+            movie_ids=movie_ids,
+            model=_FakeKBRDModel(),
+        )
+        diagnostics = {}
+        with patch.object(self.adapter, "_load_kbrd_resources"), patch.object(
+            self.adapter, "_load_kbrd_model"
+        ), patch.object(self.adapter, "_has_error", False), patch.object(
+            self.adapter, "_data_loaded", True
+        ), patch.object(
+            self.adapter, "_kbrd_agent", agent
+        ), patch.object(
+            self.adapter, "_movie_ids", frozenset(movie_ids)
+        ), patch.object(
+            self.adapter, "_id2entity", {}
+        ), patch.object(
+            self.adapter,
+            "prepare_input",
+            return_value=([101], [], ["'seed'"], [], []),
+        ), patch.object(
+            self.adapter.movie_catalogue, "get_title", side_effect=title_lookup
+        ), patch.object(
+            self.adapter, "_is_valid_movie_title", return_value=True
+        ), patch.object(
+            self.adapter, "_infer_genre", return_value="Unknown"
+        ), patch.object(
+            self.adapter, "_enrich_candidate", side_effect=lambda candidate: candidate
+        ):
+            candidates, _ = self.adapter.get_kbrd_candidates(
+                "User: seed",
+                top_k=50,
+                diagnostics=diagnostics,
+                use_fusion=False,
+                retrieval_mode="kbrd",
+            )
+        return candidates, diagnostics
+
+    def test_filtering_fallback_and_success_are_distinguished(self):
+        fallback, fallback_diagnostics = self._run_neural_path(lambda _movie_id: None)
+        self.assertLess(len(fallback), 50)
+        self.assertEqual(
+            fallback_diagnostics["fallback_reason"],
+            "no_valid_candidates_after_filtering",
+        )
+
+        candidates, success_diagnostics = self._run_neural_path(
+            lambda movie_id: f"Movie {movie_id}"
+        )
+        self.assertEqual(len(candidates), 50)
+        self.assertTrue(
+            all(candidate["source"] == "KBRD_NEURAL" for candidate in candidates)
+        )
+        self.assertIsNone(success_diagnostics["fallback_reason"])
+
+
 class _Provider:
     def __init__(self, candidates, fail_on_call=None):
         self.candidates = candidates
@@ -247,6 +376,32 @@ class _Provider:
         if self.fail_on_call == len(self.calls):
             raise RuntimeError("synthetic interruption")
         return ([dict(candidate) for candidate in self.candidates], [])
+
+
+class _SequencedProvider:
+    def __init__(self, candidates, outcomes):
+        self.candidates = candidates
+        self.outcomes = list(outcomes)
+        self.calls = []
+
+    def __call__(self, dialogue, **kwargs):
+        self.calls.append((dialogue, kwargs))
+        outcome = self.outcomes[len(self.calls) - 1]
+        if isinstance(outcome, BaseException):
+            raise outcome
+        kwargs["diagnostics"]["fallback_reason"] = outcome
+        if outcome == KBRD_FALLBACK_NO_INFERENCE_SEEDS:
+            kwargs["diagnostics"].update(
+                {
+                    "seed_entity_ids": [],
+                    "dialogue_seed_entity_ids": [],
+                    "qwen_seed_entity_ids": [],
+                    "num_matched_seeds": 0,
+                }
+            )
+        if outcome is None:
+            return ([dict(candidate) for candidate in self.candidates], [])
+        return ([{"id": value, "title": "static"} for value in range(1, 6)], [])
 
 
 class TestBuilderIntegration(unittest.TestCase):
@@ -454,6 +609,256 @@ class TestBuilderIntegration(unittest.TestCase):
                     "sha256": _sha256(fixture["catalogue_path"]),
                 },
             )
+
+    def test_no_inference_seeds_is_excluded_and_following_instance_succeeds(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture = self._fixture(root)
+            provider = _SequencedProvider(
+                fixture["candidates"],
+                [KBRD_FALLBACK_NO_INFERENCE_SEEDS, None, None, None],
+            )
+            output = root / "output"
+            summary = self._build(fixture, output, provider)
+            audit = [
+                json.loads(line)
+                for line in (output / AUDIT_FILENAME).read_text(encoding="utf-8").splitlines()
+            ]
+            sft = [
+                json.loads(line)
+                for line in (output / SFT_FILENAME).read_text(encoding="utf-8").splitlines()
+            ]
+
+            excluded = audit[0]
+            self.assertFalse(excluded["eligible"])
+            self.assertEqual(
+                excluded["exclusion_reason"], EXCLUSION_NO_NEURAL_KBRD_SEEDS
+            )
+            self.assertIsNone(excluded["assistant_target"])
+            self.assertIsNone(excluded["candidate_digest"])
+            self.assertEqual(excluded["kbrd_top50"], [])
+            self.assertEqual(excluded["loo_ckg_top50"], [])
+            self.assertEqual(excluded["rrf_top50"], [])
+            self.assertEqual(
+                excluded["diagnostics"]["kbrd"]["fallback_reason"],
+                KBRD_FALLBACK_NO_INFERENCE_SEEDS,
+            )
+            self.assertIsNone(excluded["diagnostics"]["loo_ckg"])
+            self.assertNotIn(
+                excluded["instance_key"], {record["instance_key"] for record in sft}
+            )
+
+            following = audit[1]
+            self.assertTrue(following["eligible"])
+            self.assertEqual(len(following["kbrd_top50"]), 50)
+            self.assertEqual(len(following["rrf_top50"]), 50)
+            self.assertIn(
+                following["instance_key"], {record["instance_key"] for record in sft}
+            )
+            self.assertEqual(summary["processed"]["retrieval_completed_instances"], 3)
+            self.assertEqual(summary["processed"]["retrieval_not_run_instances"], 1)
+            self.assertEqual(
+                summary["processed"]["excluded_by_reason"],
+                {
+                    "ground_truth_absent_from_rrf_top50": 1,
+                    EXCLUSION_NO_NEURAL_KBRD_SEEDS: 1,
+                },
+            )
+            self.assertEqual(summary["reachability"]["evaluated_instances"], 3)
+            self.assertAlmostEqual(
+                summary["processed"][
+                    "eligible_percentage_of_retrieval_completed"
+                ],
+                200.0 / 3.0,
+            )
+
+    def test_no_seed_reason_with_seed_diagnostics_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture = self._fixture(root)
+
+            def contradictory_provider(_dialogue, **kwargs):
+                kwargs["diagnostics"].update(
+                    {
+                        "fallback_reason": KBRD_FALLBACK_NO_INFERENCE_SEEDS,
+                        "seed_entity_ids": [101],
+                        "dialogue_seed_entity_ids": [101],
+                        "qwen_seed_entity_ids": [],
+                        "num_matched_seeds": 1,
+                    }
+                )
+                return ([{"id": value, "title": "static"} for value in range(1, 6)], [])
+
+            with self.assertRaisesRegex(RuntimeError, "contradict"):
+                self._build(
+                    fixture,
+                    root / "output",
+                    contradictory_provider,
+                    max_instances=1,
+                )
+
+    def test_resume_does_not_retry_no_inference_seed_exclusion(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture = self._fixture(root)
+            resumed_dir = root / "resumed"
+            interrupted = _SequencedProvider(
+                fixture["candidates"],
+                [
+                    KBRD_FALLBACK_NO_INFERENCE_SEEDS,
+                    RuntimeError("synthetic interruption"),
+                ],
+            )
+            with self.assertRaisesRegex(RuntimeError, "synthetic interruption"):
+                self._build(fixture, resumed_dir, interrupted)
+
+            resumed_provider = _SequencedProvider(
+                fixture["candidates"], [None, None, None]
+            )
+            self._build(fixture, resumed_dir, resumed_provider, resume=True)
+            self.assertEqual(len(resumed_provider.calls), 3)
+
+            fresh_dir = root / "fresh"
+            fresh_provider = _SequencedProvider(
+                fixture["candidates"],
+                [KBRD_FALLBACK_NO_INFERENCE_SEEDS, None, None, None],
+            )
+            self._build(fixture, fresh_dir, fresh_provider)
+            for filename in (CONTRIBUTIONS_FILENAME, AUDIT_FILENAME, SFT_FILENAME):
+                self.assertEqual(
+                    _digest(resumed_dir / filename),
+                    _digest(fresh_dir / filename),
+                )
+
+    def test_malformed_no_seed_resume_records_are_rejected(self):
+        def set_rrf(record):
+            record["rrf_top50"] = [{"id": 101, "title": "fabricated"}]
+
+        def set_eligible(record):
+            record["eligible"] = True
+
+        def change_reason(record):
+            record["diagnostics"]["kbrd"]["fallback_reason"] = "wrong"
+
+        def add_seed(record):
+            record["diagnostics"]["kbrd"]["seed_entity_ids"] = [101]
+
+        for name, tamper in (
+            ("rrf", set_rrf),
+            ("eligible", set_eligible),
+            ("fallback-reason", change_reason),
+            ("seed-diagnostics", add_seed),
+        ):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                fixture = self._fixture(root)
+                output = root / "output"
+                self._build(
+                    fixture,
+                    output,
+                    _SequencedProvider(
+                        fixture["candidates"],
+                        [KBRD_FALLBACK_NO_INFERENCE_SEEDS],
+                    ),
+                    max_instances=1,
+                )
+                audit_path = output / AUDIT_FILENAME
+                record = json.loads(audit_path.read_text(encoding="utf-8"))
+                tamper(record)
+                audit_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+                with self.assertRaisesRegex(ValueError, "provenance mismatch"):
+                    self._build(
+                        fixture,
+                        output,
+                        _Provider(fixture["candidates"]),
+                        max_instances=1,
+                        resume=True,
+                    )
+
+    def test_fallback_policy_is_fingerprinted_and_old_manifest_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture = self._fixture(root)
+            output = root / "output"
+            self._build(fixture, output, _Provider(fixture["candidates"]))
+            manifest_path = output / RUN_FILENAME
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            configuration = manifest["scientific_configuration"]
+            self.assertEqual(configuration["schemas"]["audit"], "rrf_train_audit_v2")
+            self.assertEqual(configuration["schemas"]["summary"], "rrf_train_summary_v2")
+            self.assertEqual(configuration["schemas"]["sft"], "rrf_train_sft_v1")
+            self.assertEqual(
+                configuration["kbrd"]["fallback_policy_version"],
+                KBRD_FALLBACK_POLICY_VERSION,
+            )
+            self.assertEqual(
+                configuration["kbrd"]["nonfatal_fallback_reasons"],
+                [KBRD_FALLBACK_NO_INFERENCE_SEEDS],
+            )
+
+            changed_version = copy.deepcopy(configuration)
+            changed_version["kbrd"]["fallback_policy_version"] = "different"
+            self.assertNotEqual(
+                canonical_json_digest(changed_version), manifest["run_fingerprint"]
+            )
+            changed_reasons = copy.deepcopy(configuration)
+            changed_reasons["kbrd"]["nonfatal_fallback_reasons"] = []
+            self.assertNotEqual(
+                canonical_json_digest(changed_reasons), manifest["run_fingerprint"]
+            )
+
+            old_manifest = copy.deepcopy(manifest)
+            old_configuration = old_manifest["scientific_configuration"]
+            old_configuration["kbrd"].pop("fallback_policy_version")
+            old_configuration["kbrd"].pop("nonfatal_fallback_reasons")
+            old_configuration["schemas"]["audit"] = "rrf_train_audit_v1"
+            old_configuration["schemas"]["summary"] = "rrf_train_summary_v1"
+            old_manifest["run_fingerprint"] = canonical_json_digest(old_configuration)
+            manifest_path.write_text(
+                json.dumps(old_manifest, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "fingerprint/configuration"):
+                self._build(
+                    fixture,
+                    output,
+                    _Provider(fixture["candidates"]),
+                    resume=True,
+                )
+
+    def test_non_seed_fallback_reasons_remain_fatal(self):
+        for reason in (
+            "model_or_resources_unavailable",
+            "no_valid_candidates_after_filtering",
+        ):
+            with self.subTest(reason=reason), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                fixture = self._fixture(root)
+                provider = _SequencedProvider(fixture["candidates"], [reason])
+                with self.assertRaisesRegex(RuntimeError, reason):
+                    self._build(fixture, root / "output", provider)
+
+    def test_invalid_neural_candidate_lists_remain_fatal_in_builder(self):
+        for case in ("short", "duplicate"):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                fixture = self._fixture(root)
+                if case == "short":
+                    candidates = fixture["candidates"][:49]
+                    expected_error = "exactly 50"
+                else:
+                    candidates = [
+                        *fixture["candidates"][:49],
+                        dict(fixture["candidates"][0]),
+                    ]
+                    expected_error = "duplicate"
+                with self.assertRaisesRegex(RuntimeError, expected_error):
+                    self._build(
+                        fixture,
+                        root / "output",
+                        _Provider(candidates),
+                    )
 
     def test_partial_resume_equals_fresh_and_mismatch_fails_closed(self):
         with tempfile.TemporaryDirectory() as directory:

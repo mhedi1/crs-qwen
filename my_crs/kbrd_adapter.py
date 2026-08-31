@@ -540,6 +540,9 @@ def get_kbrd_candidates(
         tuple: (list of candidate dicts, list of detected decades)
     """
 
+    if diagnostics is not None:
+        diagnostics["fallback_reason"] = None
+
     # Resolve runtime overrides
     run_qwen_fallback = _USE_QWEN_SEED_FALLBACK
     run_seed_fusion = _USE_SEED_FUSION
@@ -574,6 +577,7 @@ def get_kbrd_candidates(
         logger.warning("[KBRD Neural] Falling back because model or resources are unavailable.")
         if diagnostics is not None:
             diagnostics.update({
+                "fallback_reason": "model_or_resources_unavailable",
                 "extracted_seeds": [], "qwen_fallback_seeds": [],
                 # Historical compatibility keys
                 "seed_entity_ids": [],
@@ -657,6 +661,7 @@ def get_kbrd_candidates(
         logger.warning("[KBRD Neural] No entities detected in dialogue. Using fallback.")
         if diagnostics is not None:
             diagnostics.update({
+                "fallback_reason": "no_inference_seeds",
                 "extracted_seeds": detected_phrases,
                 "qwen_fallback_seeds": _qwen_titles,
                 # Historical compatibility keys
@@ -745,6 +750,7 @@ def get_kbrd_candidates(
         logger.warning("[KBRD Neural] No valid candidates after filtering. Using fallback.")
         if diagnostics is not None:
             diagnostics.update({
+                "fallback_reason": "no_valid_candidates_after_filtering",
                 "extracted_seeds": detected_phrases,
                 "qwen_fallback_seeds": _qwen_titles,
                 # Historical compatibility keys
