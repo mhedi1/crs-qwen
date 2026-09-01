@@ -20,6 +20,7 @@ from my_crs.build_stage2_v2_dataset import (
     IMPLEMENTATION_BASE_COMMIT,
     MANIFEST_FILENAME,
     NO_SEED_EXCLUSION,
+    PROJECT_ROOT,
     SUMMARY_FILENAME,
     TOP_K,
     UNORDERED_SET_SEMANTICS,
@@ -211,9 +212,29 @@ def _build_fixture(source: Path, output: Path) -> dict:
     )
 
 
+class DefaultSourcePolicyTests(unittest.TestCase):
+    def test_default_source_is_canonical_frozen_full_audit(self):
+        expected = (
+            PROJECT_ROOT
+            / "experiments"
+            / "rrf_train_peft_full_bcdacb14"
+            / "train_rrf_candidates.audit.jsonl"
+        )
+        self.assertEqual(DEFAULT_SOURCE_AUDIT, expected)
+        self.assertEqual(
+            DEFAULT_SOURCE_AUDIT.relative_to(PROJECT_ROOT).as_posix(),
+            "experiments/rrf_train_peft_full_bcdacb14/"
+            "train_rrf_candidates.audit.jsonl",
+        )
+
+
 class FrozenAuditIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        if not DEFAULT_SOURCE_AUDIT.is_file():
+            raise unittest.SkipTest(
+                "canonical frozen full TRAIN audit is not available on this machine"
+            )
         cls.observed_sha256 = sha256_file(DEFAULT_SOURCE_AUDIT)
         cls.statistics = scan_source_audit(
             DEFAULT_SOURCE_AUDIT,

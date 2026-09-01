@@ -23,8 +23,8 @@ from typing import Any
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_AUDIT = (
     PROJECT_ROOT
-    / ".codex_stage2_v2_review"
-    / "codex_stage2_v2_review"
+    / "experiments"
+    / "rrf_train_peft_full_bcdacb14"
     / "train_rrf_candidates.audit.jsonl"
 )
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "experiments" / "stage2_v2_dataset"
