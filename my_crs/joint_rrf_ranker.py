@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 import torch
+import transformers
 from torch import nn
 
 from my_crs.build_stage2_v2_dataset import (
@@ -28,15 +29,16 @@ from my_crs.build_stage2_v2_dataset import (
 INPUT_SERIALIZATION_VERSION = "stage2_v2_joint_input_v1"
 TOKEN_BOUNDARY_POLICY_VERSION = "segmentwise_offsets_no_special_tokens_v1"
 MASK_POLICY_VERSION = "qwen2_sdpa_4d_independent_candidate_blocks_v1"
-POSITION_ID_POLICY_VERSION = "common_causal_blocks_restart_after_prefix_v1"
-SCORER_ARCHITECTURE_VERSION = "shared_layernorm_linear_zero_init_v1"
-RRF_PRIOR_POLICY_VERSION = "normalized_log_rrf_plus_mean_centered_residual_v1"
+POSITION_ID_POLICY_VERSION = "common_prefix_then_ragged_block_relative_restart_v2"
+SCORER_ARCHITECTURE_VERSION = "shared_bias_free_layernorm_linear_zero_init_v2"
+RRF_PRIOR_POLICY_VERSION = "float64_log_rrf_plus_mean_centered_residual_v2"
 RANKING_POLICY_VERSION = "score_desc_rrf_rank_entity_id_v1"
+DUPLICATE_TITLE_POLICY_VERSION = (
+    "evaluation_equivalent_shared_contextual_residual_v1"
+)
 
 REQUIRED_MODEL_TYPE = "qwen2"
 REQUIRED_ATTENTION_BACKEND = "sdpa"
-TESTED_TRANSFORMERS_VERSION = "5.8.0"
-TESTED_TORCH_VERSION = "2.6.0+cu124"
 
 SYSTEM_INSTRUCTION = """You are an internal contextual movie-candidate scorer.
 Candidate identifiers are arbitrary and do not indicate recommendation quality.
@@ -60,16 +62,41 @@ def phase2_architecture_configuration() -> dict[str, Any]:
         "candidate_count": TOP_K,
         "required_model_type": REQUIRED_MODEL_TYPE,
         "required_attention_backend": REQUIRED_ATTENTION_BACKEND,
-        "tested_transformers_version": TESTED_TRANSFORMERS_VERSION,
-        "tested_torch_version": TESTED_TORCH_VERSION,
+        "independent_scoring_blocks": True,
+        "duplicate_title_policy": DUPLICATE_TITLE_POLICY_VERSION,
+        "position_id_semantics": "prefix_absolute_then_block_relative_left_aligned_ragged",
+        "scoring_representation": "final_token_covering_contextual_fit_marker",
+        "shared_scoring_head": True,
+        "scoring_head_biases": False,
+        "scoring_head_zero_initialization": True,
+        "residual_centering": "per_event_arithmetic_mean",
+        "rrf_combination_dtype": "float64",
         "gamma_gate": False,
         "rrf_in_model_text": False,
     }
 
 
 def phase2_architecture_fingerprint() -> str:
+    return _provenance_fingerprint(phase2_architecture_configuration())
+
+
+def phase2_runtime_provenance() -> dict[str, str]:
+    """Return software provenance without changing the architecture identity."""
+
+    return {
+        "required_attention_backend": REQUIRED_ATTENTION_BACKEND,
+        "runtime_torch_version": torch.__version__,
+        "runtime_transformers_version": transformers.__version__,
+    }
+
+
+def phase2_runtime_fingerprint() -> str:
+    return _provenance_fingerprint(phase2_runtime_provenance())
+
+
+def _provenance_fingerprint(configuration: Mapping[str, Any]) -> str:
     payload = json.dumps(
-        phase2_architecture_configuration(),
+        configuration,
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -177,6 +204,11 @@ def _common_prefix(history: str, candidates: Sequence[Mapping[str, Any]]) -> str
 
 
 def _scoring_block(candidate: Mapping[str, Any]) -> str:
+    # Deliberately omit local/entity IDs here.  Identical sanitized titles are
+    # evaluation-equivalent under the frozen normalized-title labels/metrics,
+    # so they share one contextual residual.  Stage 2 therefore cannot
+    # distinguish such candidates; this is an explicit scientific limitation,
+    # not hidden negative supervision.
     return (
         "\n<SCORING_QUERY>\n"
         f'Candidate title: {candidate["title_sanitized"]}\n'
@@ -533,7 +565,7 @@ def collate_scoring_events(
         score_indices[batch_index] = event.score_token_indices
         for padding_index in range(length, maximum_length):
             attention_mask[batch_index, 0, padding_index, padding_index] = True
-    return PackedScoringBatch(
+    batch = PackedScoringBatch(
         input_ids=input_ids,
         attention_mask=attention_mask,
         position_ids=position_ids,
@@ -541,6 +573,8 @@ def collate_scoring_events(
         sequence_lengths=tuple(sequence_lengths),
         events=tuple(events),
     )
+    validate_packed_batch(batch)
+    return batch
 
 
 def validate_packed_batch(batch: PackedScoringBatch) -> None:
@@ -593,14 +627,24 @@ def validate_packed_batch(batch: PackedScoringBatch) -> None:
 
 
 class SharedContextualScoringHead(nn.Module):
-    """One shared LayerNorm-plus-linear scorer for all candidate states."""
+    """One shared, bias-free LayerNorm-plus-linear scorer.
+
+    The zero projection makes every initial raw residual zero.  Consequently,
+    the first backward step updates the projection weight but gives no
+    meaningful gradient to upstream Qwen/LoRA parameters until that weight is
+    nonzero.  This expected one-step optimization staging is not a defect.
+    """
 
     def __init__(self, hidden_size: int, *, layer_norm_eps: float = 1e-6) -> None:
         super().__init__()
-        self.layer_norm = nn.LayerNorm(hidden_size, eps=layer_norm_eps)
-        self.projection = nn.Linear(hidden_size, 1, bias=True)
+        self.layer_norm = nn.LayerNorm(
+            hidden_size,
+            eps=layer_norm_eps,
+            elementwise_affine=True,
+            bias=False,
+        )
+        self.projection = nn.Linear(hidden_size, 1, bias=False)
         nn.init.zeros_(self.projection.weight)
-        nn.init.zeros_(self.projection.bias)
 
     def forward(self, candidate_hidden_states: torch.Tensor) -> torch.Tensor:
         if candidate_hidden_states.ndim != 3 or candidate_hidden_states.shape[1] != TOP_K:
@@ -623,7 +667,11 @@ def _require_qwen2_sdpa(model: nn.Module) -> None:
 
 
 class JointRRFRanker(nn.Module):
-    """Qwen2 contextual residual scorer with a single shared zero-init head."""
+    """Qwen2 contextual scorer whose forward returns raw residuals.
+
+    Phase-3 ranking/loss code must call :func:`mean_center_residuals` to obtain
+    contextual deltas, or :func:`combine_rrf_prior`, which centers internally.
+    """
 
     def __init__(self, base_model: nn.Module) -> None:
         super().__init__()
@@ -639,8 +687,10 @@ class JointRRFRanker(nn.Module):
         )
 
     def forward(self, batch: PackedScoringBatch) -> torch.Tensor:
+        """Return uncentered shared-head residuals with shape ``[batch, 50]``."""
+
         _require_qwen2_sdpa(self.base_model)
-        validate_packed_batch(batch)
+        _validate_forward_batch(batch)
         maximum_position = int(batch.position_ids.max().item())
         configured_maximum = getattr(self.base_model.config, "max_position_embeddings", None)
         if type(configured_maximum) is int and maximum_position >= configured_maximum:
@@ -666,7 +716,54 @@ class JointRRFRanker(nn.Module):
         return residuals
 
 
+def _validate_forward_batch(batch: PackedScoringBatch) -> None:
+    """Perform only constant-size/shape checks on the model hot path."""
+
+    if not isinstance(batch, PackedScoringBatch):
+        raise ValueError("Joint scorer requires a PackedScoringBatch")
+    if batch.mask_policy_version != MASK_POLICY_VERSION:
+        raise ValueError("Batch mask-policy version mismatch")
+    if batch.position_id_policy_version != POSITION_ID_POLICY_VERSION:
+        raise ValueError("Batch position-ID-policy version mismatch")
+    if batch.input_ids.ndim != 2 or batch.input_ids.dtype != torch.long:
+        raise ValueError("Batch input IDs must be a two-dimensional long tensor")
+    batch_size, sequence_length = batch.input_ids.shape
+    if batch.attention_mask.shape != (batch_size, 1, sequence_length, sequence_length):
+        raise ValueError("Batch attention mask must have shape [batch, 1, L, L]")
+    if batch.attention_mask.dtype != torch.bool:
+        raise ValueError("Batch attention mask must be boolean")
+    if batch.position_ids.shape != (batch_size, sequence_length):
+        raise ValueError("Batch position IDs have an invalid shape")
+    if batch.position_ids.dtype != torch.long:
+        raise ValueError("Batch position IDs must be a long tensor")
+    if batch.score_token_indices.shape != (batch_size, TOP_K):
+        raise ValueError("Batch must contain exactly 50 score indices per event")
+    if batch.score_token_indices.dtype != torch.long:
+        raise ValueError("Batch score-token indices must be a long tensor")
+    devices = {
+        batch.input_ids.device,
+        batch.attention_mask.device,
+        batch.position_ids.device,
+        batch.score_token_indices.device,
+    }
+    if len(devices) != 1:
+        raise ValueError("All packed batch tensors must be on the same device")
+    if len(batch.events) != batch_size or len(batch.sequence_lengths) != batch_size:
+        raise ValueError("Batch event metadata count mismatch")
+    if any(length <= 0 or length > sequence_length for length in batch.sequence_lengths):
+        raise ValueError("Batch sequence-length metadata is invalid")
+    if batch.score_token_indices.numel() != batch_size * TOP_K:
+        raise ValueError("Batch score-token count mismatch")
+    if (
+        int(batch.score_token_indices.min().item()) < 0
+        or int(batch.score_token_indices.max().item()) >= sequence_length
+    ):
+        raise ValueError("Batch score-token index is outside the sequence")
+
+
 def mean_center_residuals(residuals: torch.Tensor) -> torch.Tensor:
+    """Convert raw shared-head residuals into required contextual deltas."""
+
     if not isinstance(residuals, torch.Tensor) or residuals.shape[-1:] != (TOP_K,):
         raise ValueError("Residuals must have final dimension 50")
     if not torch.is_floating_point(residuals) or not torch.isfinite(residuals).all():
@@ -686,6 +783,12 @@ def combine_rrf_prior(
     rrf_scores: torch.Tensor | Sequence[float],
     residuals: torch.Tensor | Sequence[float],
 ) -> RRFCombination:
+    """Combine frozen RRF scores with raw residuals, centering internally.
+
+    All numerically sensitive 50-way arithmetic is performed in float64.  The
+    frozen prior is detached; conversion of residuals preserves autograd.
+    """
+
     prior = (
         rrf_scores
         if isinstance(rrf_scores, torch.Tensor)
@@ -700,10 +803,8 @@ def combine_rrf_prior(
         raise ValueError("RRF scores and residuals must have final dimension 50")
     if prior.shape != raw_residuals.shape:
         raise ValueError("RRF scores and residuals must have identical shapes")
-    if not torch.is_floating_point(prior):
-        prior = prior.to(torch.float64)
-    if not torch.is_floating_point(raw_residuals):
-        raw_residuals = raw_residuals.to(torch.float64)
+    prior = prior.detach().to(torch.float64)
+    raw_residuals = raw_residuals.to(torch.float64)
     if not torch.isfinite(prior).all() or not torch.all(prior > 0):
         raise ValueError("Every RRF score must be finite and strictly positive")
     if not torch.isfinite(raw_residuals).all():
