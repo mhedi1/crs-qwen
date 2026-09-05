@@ -74,16 +74,14 @@ class ResponseGeneratorGroundingTests(unittest.TestCase):
         )
         self.assertNotIn("The Babadook", result)
 
-    def test_lowercase_it_and_fit_do_not_satisfy_grounding(self):
+    def test_initial_accepts_natural_selected_title_opening(self):
+        generated = "It would be a strong choice because it fits your request."
         result, _ = self.generate_with(
             "SELECTED_TITLE: It\n"
-            "RESPONSE: I think it would fit your request."
+            f"RESPONSE: {generated}"
         )
 
-        self.assertEqual(
-            result,
-            response_generator._fallback_response(self.selected_movie),
-        )
+        self.assertEqual(result, generated)
 
     def test_current_selection_is_excluded_from_previous_title_veto(self):
         generated = "I recommend It because its suspense matches your request."

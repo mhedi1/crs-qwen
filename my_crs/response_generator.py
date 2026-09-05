@@ -27,11 +27,7 @@ def _fallback_response(movie: dict) -> str:
                 f"I think it fits well with what you described.")
 
 
-def _parse_grounded_response(
-    raw_response: str,
-    selected_title: str,
-    require_recommendation_opening: bool = True,
-) -> str | None:
+def _parse_grounded_response(raw_response: str, selected_title: str) -> str | None:
     lines = raw_response.strip().splitlines()
     if len(lines) < 2 or not lines[0].startswith(_SELECTED_TITLE_PREFIX):
         return None
@@ -46,15 +42,6 @@ def _parse_grounded_response(
     response = "\n".join(response_lines).strip()
     if not response:
         return None
-
-    if require_recommendation_opening:
-        required_opening = f"I recommend {selected_title}"
-        if not response.startswith(required_opening):
-            return None
-        if len(response) > len(required_opening):
-            boundary = response[len(required_opening)]
-            if not boundary.isspace() and boundary not in ".,!?:;—-":
-                return None
     return response
 
 
@@ -109,13 +96,13 @@ def generate_response(
     else:
         response_instruction = (
             "Write one conversational response using the selected recommendation.\n"
-            f"The RESPONSE field must begin exactly with: I recommend {selected_title}\n"
         )
         reply_requirements = (
-            "- mention the movie naturally\n"
+            "- discuss exactly the authoritative selected movie\n"
+            "- mention the selected movie naturally\n"
             "- justify it with the user's preferences\n"
-            "- sound concise and friendly\n"
-            "- avoid mentioning unselected candidates\n"
+            "- do not substitute or recommend another movie\n"
+            "- remain concise and conversational\n"
         )
 
     messages = [
@@ -147,11 +134,7 @@ def generate_response(
         if not response or not response.strip():
             logger.warning("[Response Generator] Empty output from Qwen.")
             return _fallback_response(selected_movie)
-        grounded_response = _parse_grounded_response(
-            response,
-            selected_title,
-            require_recommendation_opening=not is_followup,
-        )
+        grounded_response = _parse_grounded_response(response, selected_title)
         if grounded_response is None:
             logger.warning(
                 "[Response Generator] Malformed or ungrounded output from Qwen."
