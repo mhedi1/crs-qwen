@@ -24,7 +24,7 @@ export function SystemIntel({ profile }: { profile: Profile }) {
           <span className="text-foreground font-mono px-1 py-0.5 rounded transition-colors">{profile.turn || "0"}</span>
         </div>
         <div className="flex justify-between items-baseline text-[0.8rem]">
-          <span className="text-muted-foreground">Entity seeds:</span>
+          <span className="text-muted-foreground">Entities detected:</span>
           <span className="text-foreground font-mono px-1 py-0.5 rounded transition-colors">{profile.seed_count || "0"}</span>
         </div>
         <div className="flex justify-between items-baseline text-[0.8rem]">
@@ -38,13 +38,13 @@ export function SystemIntel({ profile }: { profile: Profile }) {
       <div className="h-[1px] bg-border my-4" />
       
       <div className="flex flex-col gap-2 mb-3">
-        <div className="text-[0.7rem] font-semibold text-muted-foreground tracking-[0.06em]">USER PREFERENCES</div>
+        <div className="text-[0.7rem] font-semibold text-muted-foreground tracking-[0.06em]">DETECTED CONVERSATION SIGNALS</div>
         <div className="flex justify-between items-baseline text-[0.8rem]">
-          <span className="text-muted-foreground">Genre:</span>
+          <span className="text-muted-foreground">Genres seen:</span>
           <span className="text-foreground font-mono px-1 py-0.5 rounded transition-colors">{genresStr}</span>
         </div>
         <div className="flex justify-between items-baseline text-[0.8rem]">
-          <span className="text-muted-foreground">Decade:</span>
+          <span className="text-muted-foreground">Decades seen:</span>
           <span className="text-foreground font-mono px-1 py-0.5 rounded transition-colors">{decadesStr}</span>
         </div>
       </div>
@@ -52,7 +52,7 @@ export function SystemIntel({ profile }: { profile: Profile }) {
       <div className="h-[1px] bg-border my-4" />
       
       <div className="flex flex-col flex-1">
-        <div className="text-[0.7rem] font-semibold text-muted-foreground tracking-[0.06em] mb-2">MENTIONED FILMS</div>
+        <div className="text-[0.7rem] font-semibold text-muted-foreground tracking-[0.06em] mb-2">MENTIONED ENTITIES</div>
         <div className="flex flex-wrap gap-1.5 p-1 rounded transition-colors">
           {profile.mentioned_movies.length === 0 ? (
             <span className="text-muted-foreground text-sm">—</span>

@@ -7,6 +7,49 @@ logger = logging.getLogger(__name__)
 _SELECTED_TITLE_PREFIX = "SELECTED_TITLE:"
 _RESPONSE_PREFIX = "RESPONSE:"
 
+_ANTI_FABRICATION_RULE = (
+    " Only state factual information that appears in [Selected Recommendation] "
+    "or [Dialogue History]. Never invent or assume cast, director, release year, "
+    "rating, awards, or plot details. If a fact was not provided to you, say it "
+    "cannot be confirmed rather than guessing."
+)
+_ANTI_FABRICATION_REQUIREMENT = (
+    "- never assert cast, director, year, rating, awards, or plot details "
+    "that were not provided; say they cannot be confirmed instead\n"
+)
+
+
+def _selected_recommendation_block(selected_movie: dict) -> str:
+    """Render only the metadata actually present on the selected movie.
+
+    Missing, empty, and "Unknown" fields are omitted entirely so the model is
+    never shown a blank or placeholder value it might try to fill in.
+    """
+
+    def _clean(key: str) -> str:
+        value = selected_movie.get(key)
+        if value is None:
+            return ""
+        text = str(value).strip()
+        if not text or text.casefold() == "unknown":
+            return ""
+        return text
+
+    lines = [f"Title: {_clean('title')}"] if _clean("title") else []
+    for label, key in (
+        ("Genre", "genre"),
+        ("Decade", "decade"),
+        ("Year", "year"),
+        ("Rating", "rating"),
+        ("Overview", "overview"),
+    ):
+        value = _clean(key)
+        if value:
+            lines.append(f"{label}: {value}")
+    if not lines:
+        return "(no metadata available)"
+    return "\n".join(lines)
+
 
 def _fallback_response(movie: dict) -> str:
     title = movie.get("title", "this film")
@@ -64,6 +107,7 @@ def generate_response(
         "with or recommend another movie. If it is an imperfect match, acknowledge "
         "the limitation but still discuss the selected movie."
     )
+    sys_content += _ANTI_FABRICATION_RULE
     if is_followup:
         sys_content += (
             " This is a follow-up turn. Answer the user's MOST RECENT follow-up "
@@ -91,7 +135,8 @@ def generate_response(
             "- answer the most recent follow-up question directly\n"
             "- discuss the selected movie only\n"
             "- do not recommend or substitute another movie\n"
-            "- sound concise and friendly\n"
+            + _ANTI_FABRICATION_REQUIREMENT
+            + "- sound concise and friendly\n"
         )
     else:
         response_instruction = (
@@ -102,7 +147,8 @@ def generate_response(
             "- mention the selected movie naturally\n"
             "- justify it with the user's preferences\n"
             "- do not substitute or recommend another movie\n"
-            "- remain concise and conversational\n"
+            + _ANTI_FABRICATION_REQUIREMENT
+            + "- remain concise and conversational\n"
         )
 
     messages = [
@@ -122,9 +168,7 @@ def generate_response(
                 f"{reply_requirements}\n"
                 f"[Dialogue History]\n{history}\n\n"
                 f"[Selected Recommendation]\n"
-                f"{selected_movie.get('title', '')}"
-                f"{' | ' + selected_movie['genre'] if selected_movie.get('genre') and selected_movie['genre'] != 'Unknown' else ''}"
-                f"{' | ' + selected_movie['decade'] if selected_movie.get('decade') and selected_movie['decade'] != 'Unknown' else ''}"
+                f"{_selected_recommendation_block(selected_movie)}"
             )
         }
     ]

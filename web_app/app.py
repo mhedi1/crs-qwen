@@ -126,6 +126,42 @@ def _extract_mentioned_movies(text: str) -> list:
     return found
 
 
+# Narrow, explicit references to the set of previously shown options.
+# Deliberately excludes generic comparatives ("which one", "compare",
+# "versus", "vs"), which are frequently part of ordinary new requests.
+_PREVIOUS_OPTIONS_PATTERN = re.compile(
+    r"\b(?:"
+    r"out\s+of\s+(?:those|these)"
+    r"|which\s+of\s+(?:those|these)"
+    r"|among\s+(?:those|these)"
+    r"|best\s+of\s+(?:those|these)"
+    r"|between\s+(?:those|them)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _references_previous_options(text: str) -> bool:
+    """True when the user explicitly refers back to previously shown options."""
+    return bool(_PREVIOUS_OPTIONS_PATTERN.search(text or ""))
+
+
+class RemoteInputTooLongError(RuntimeError):
+    """The conversation exceeded the recommender's frozen input-length limit.
+
+    This is an expected, recoverable condition — not a model failure — so it is
+    reported separately from generic remote errors. It is never retried: the
+    input length is a property of the conversation, so a retry would fail
+    identically.
+    """
+
+
+CONVERSATION_TOO_LONG_MESSAGE = (
+    "This conversation has become too long for a new recommendation. "
+    "Please clear the chat and start a new conversation so I can continue."
+)
+
+
 _recommender = None
 _recommender_error = None
 
@@ -240,6 +276,19 @@ def get_recommender():
                 json={"history": dialogue_str},
                 timeout=(10, 300),
             )
+
+            # Known out-of-range input. Surfaced separately so the user gets an
+            # actionable message instead of a model-failure message. Never
+            # retried: the same conversation would exceed the limit again.
+            if response.status_code == 413:
+                try:
+                    payload = response.json()
+                except ValueError:
+                    payload = None
+                if isinstance(payload, dict) and payload.get("error") == "input_too_long":
+                    raise RemoteInputTooLongError(
+                        "Remote recommender rejected the conversation as too long"
+                    )
 
             if not response.ok:
                 raise RuntimeError(
@@ -363,6 +412,24 @@ def classify_intent(message: str, history: list) -> str:
         return "NEW_PREFERENCE"
 
 
+def _previous_options_response(last_movie: dict) -> str:
+    """Static reply for explicit references to previously shown options.
+
+    Performs no ranking, no selection, and no model call. The follow-up layer
+    never re-ranks earlier suggestions; ranking happens once per recommendation
+    request inside the frozen recommender.
+    """
+    title = last_movie.get("title") or "the current recommendation"
+    return (
+        f"I can only discuss the current recommendation, **{title}**. "
+        "This follow-up layer doesn't compare or re-rank earlier suggestions — "
+        "ranking is produced once per recommendation request by the recommender "
+        "itself, not here. "
+        f"Ask me anything about **{title}**, or tell me what you'd like next and "
+        "I'll run a fresh recommendation."
+    )
+
+
 def _generate_followup_response(dialogue_history: list, last_movie: dict, previously_recommended: list = None) -> str:
     """Generate a conversational follow-up response using the response generator."""
     try:
@@ -417,7 +484,17 @@ def api_chat():
         session["turn"] = 0
     session["turn"] += 1
 
-    intent = classify_intent(user_message, session["history"])
+    # ── Explicit previous-options reference: answered locally, never ranked ──
+    # This short-circuits intent classification, which is itself a Qwen3 call,
+    # so such a turn performs no model call, no retrieval, and no ranking.
+    previous_options_followup = bool(
+        session.get("last_movie")
+    ) and _references_previous_options(user_message)
+
+    if previous_options_followup:
+        intent = "FOLLOW_UP"
+    else:
+        intent = classify_intent(user_message, session["history"])
 
     history = list(session["history"])
     history.append({"role": "user", "content": user_message})
@@ -425,7 +502,10 @@ def api_chat():
     # ── FOLLOW_UP path: skip KBRD retrieval and Qwen reranker ──────────────
     if intent == "FOLLOW_UP" and session.get("last_movie"):
         last_movie = session["last_movie"]
-        response_text = _generate_followup_response(history, last_movie, session.get("previously_recommended", []))
+        if previous_options_followup:
+            response_text = _previous_options_response(last_movie)
+        else:
+            response_text = _generate_followup_response(history, last_movie, session.get("previously_recommended", []))
 
         history.append({"role": "system", "content": response_text})
         session["history"] = history
@@ -511,6 +591,13 @@ def api_chat():
                 "final_rank": final_rank,
                 "in_final_top5": in_final_top5,
             }
+    except RemoteInputTooLongError:
+        # Expected condition, not a model failure: no retry, no local ranking
+        # fallback, and no Qwen3 call to pick a different movie.
+        print("[INFO] Conversation exceeded the recommender's input-length limit.")
+        response_text = CONVERSATION_TOO_LONG_MESSAGE
+        movie = None
+        candidates = []
     except Exception as e:
         print(f"[ERROR] Recommender call failed: {e}")
         traceback.print_exc()
