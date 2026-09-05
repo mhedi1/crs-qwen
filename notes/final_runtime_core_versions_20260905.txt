@@ -1,0 +1,12 @@
+torch 2.6.0+cu124
+transformers 5.14.1
+peft 0.20.0
+numpy 1.26.4
+scipy 1.15.3
+scikit-learn 1.5.2
+spacy 3.7.5
+rapidfuzz 3.14.5
+torch-geometric 2.7.0
+gensim 4.4.0
+nltk 3.9.4
+python-dotenv imported OK
