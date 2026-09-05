@@ -1,0 +1,3 @@
+[submodule "baseline_repo/KBRD_project"]
+	path = baseline_repo/KBRD_project
+	url = https://github.com/Tju-LMc/ConversationalRecommenderSystem.git
