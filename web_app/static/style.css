@@ -348,6 +348,9 @@ body {
   font-family: 'Courier New', Consolas, monospace;
   padding: 3px 10px;
   border-radius: 20px;
+  background: rgba(107,114,128,.08);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
   cursor: default;
   white-space: nowrap;
   user-select: none;

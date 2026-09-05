@@ -195,8 +195,8 @@ export function runPipeline(input: EngineInput): ChatResponse {
     title: selected.title,
     genre: selected.genre,
     decade: selected.decade,
-    kbrd_rank: 1,
-    in_top5: true,
+    final_rank: 1,
+    in_final_top5: true,
   }
 
   const movie: Movie = {

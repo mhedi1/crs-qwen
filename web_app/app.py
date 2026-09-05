@@ -3,6 +3,15 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template, request, session, jsonify
+
+# Legacy my_crs modules use top-level imports such as
+# `from prompts import ...`; preserve that import contract.
+import sys
+from pathlib import Path
+_MY_CRS_DIR = Path(__file__).resolve().parents[1] / "my_crs"
+if str(_MY_CRS_DIR) not in sys.path:
+    sys.path.insert(0, str(_MY_CRS_DIR))
+
 import traceback
 import re
 import requests
@@ -190,60 +199,91 @@ def enrich_with_tmdb(title, year=None):
 
 def get_recommender():
     global _recommender, _recommender_error
+
     if _recommender is not None:
         return _recommender, None
+
     if _recommender_error is not None:
         return None, _recommender_error
-    try:
-        from my_crs.recommender import get_recommendation
-        from kbrd_adapter import get_kbrd_candidates
-        from reranker import rerank
-        from response_generator import generate_response
 
-        def custom_recommender(dialogue_history, previously_recommended=None):
+    try:
+        import os
+        import requests
+        from dotenv import load_dotenv
+        from my_crs.response_generator import generate_response
+
+        load_dotenv()
+
+        remote_url = (os.getenv("REMOTE_RECOMMENDER_URL") or "").rstrip("/")
+        remote_token = os.getenv("REMOTE_RECOMMENDER_TOKEN") or ""
+
+        if not remote_url:
+            raise RuntimeError("REMOTE_RECOMMENDER_URL is not configured")
+
+        if not remote_token:
+            raise RuntimeError("REMOTE_RECOMMENDER_TOKEN is not configured")
+
+        def remote_recommender(dialogue_history, previously_recommended=None):
             turns = []
             for turn in dialogue_history:
                 role = "User" if turn["role"] == "user" else "System"
                 turns.append(f"{role}: {turn['content']}")
+
             dialogue_str = "\n".join(turns)
-            
-            diagnostics = {}
-            # Safely pass diagnostics dictionary so it gets populated
-            try:
-                candidates, detected_decades = get_kbrd_candidates(dialogue_str, top_k=_cfg["pipeline"]["top_k_candidates"], diagnostics=diagnostics)
-            except TypeError:
-                # If diagnostics argument is removed in future
-                candidates, detected_decades = get_kbrd_candidates(dialogue_str, top_k=_cfg["pipeline"]["top_k_candidates"])
-                
-            diagnostics["detected_decades"] = detected_decades
-            
-            selected_movie, _ = rerank(dialogue_str, candidates, era_hints=detected_decades, previously_recommended=previously_recommended)
-            response = generate_response(dialogue_str, selected_movie, previously_recommended=previously_recommended)
-            
-            return {
-                "response": response,
-                "movie": {
-                    "title": selected_movie.get("title", "Unknown"),
-                    "genre": selected_movie.get("genre", "Unknown"),
-                    "decade": selected_movie.get("decade", "Unknown")
+
+            response = requests.post(
+                f"{remote_url}/recommend",
+                headers={
+                    "Authorization": f"Bearer {remote_token}",
+                    "Content-Type": "application/json",
                 },
-                "candidates": candidates[:5],
-                "diagnostics": diagnostics
+                json={"history": dialogue_str},
+                timeout=(10, 300),
+            )
+
+            if not response.ok:
+                raise RuntimeError(
+                    f"Remote recommender returned HTTP {response.status_code}: "
+                    f"{response.text[:300]}"
+                )
+
+            engine_result = response.json()
+
+            selected_movie = engine_result.get("selected_candidate")
+            if not selected_movie:
+                raise RuntimeError(
+                    "Remote FinalRecommender returned no selected candidate"
+                )
+
+            selected_movie = dict(selected_movie)
+            ranked_candidates = engine_result.get("ranked_candidates", [])
+
+            # Response generation remains local and separate from ranking.
+            response_text = generate_response(
+                dialogue_str,
+                selected_movie,
+                previously_recommended=previously_recommended,
+            )
+
+            return {
+                "response": response_text,
+                "movie": selected_movie,
+                "candidates": ranked_candidates[:5],
+                "diagnostics": engine_result.get("diagnostics", {}),
+                "selected_candidate": selected_movie,
+                "stage1_rrf_top50": engine_result.get(
+                    "stage1_rrf_top50", []
+                ),
             }
 
-        _recommender = custom_recommender
+        _recommender = remote_recommender
+        _recommender_error = None
         return _recommender, None
-    except Exception as custom_e:
-        print(f"[WARN] custom_recommender failed to load: {custom_e}. Falling back to default.")
-        try:
-            from my_crs.recommender import get_recommendation
-            _recommender = get_recommendation
-            return _recommender, None
-        except Exception as e:
-            _recommender_error = str(e)
-            print(f"[ERROR] Failed to load recommender: {e}")
-            traceback.print_exc()
-            return None, _recommender_error
+
+    except Exception as exc:
+        _recommender_error = exc
+        print(f"[ERROR] Remote FinalRecommender failed to configure: {exc}")
+        return None, exc
 
 
 _qwen_cfg_cache: dict = {}
@@ -330,7 +370,7 @@ def _generate_followup_response(dialogue_history: list, last_movie: dict, previo
         )
         if my_crs_path not in sys.path:
             sys.path.insert(0, my_crs_path)
-        from response_generator import generate_response
+        from my_crs.response_generator import generate_response
         turns = []
         for turn in dialogue_history:
             role = "User" if turn["role"] == "user" else "System"
@@ -426,6 +466,7 @@ def api_chat():
     recommender, load_error = get_recommender()
     if "previously_recommended" not in session:
         session["previously_recommended"] = []
+    previously_recommended = session["previously_recommended"]
 
     if recommender is None:
         error_msg = (
@@ -449,30 +490,20 @@ def api_chat():
     selected_candidate = None
     result = {}
     try:
-        try:
-            result = recommender(history, previously_recommended=session["previously_recommended"])
-        except TypeError:
-            result = recommender(history)
+        result = recommender(history, previously_recommended=previously_recommended)
         response_text = result.get("response", "")
         movie = result.get("movie", None)
         candidates = result.get("candidates", [])  # pipeline already returns top-5
 
-        # Find selected movie's rank within the top-5 KBRD list
         if movie and movie.get("title"):
-            sel_title = movie["title"].lower()
-            kbrd_rank = None
-            in_top5 = False
-            for i, c in enumerate(candidates):
-                if c.get("title", "").lower() == sel_title:
-                    kbrd_rank = i + 1  # 1-indexed
-                    in_top5 = True
-                    break
+            final_rank = movie.get("stage2_rank")
+            in_final_top5 = final_rank is not None and final_rank <= 5
             selected_candidate = {
                 "title": movie.get("title"),
                 "genre": movie.get("genre"),
                 "decade": movie.get("decade"),
-                "kbrd_rank": kbrd_rank,
-                "in_top5": in_top5,
+                "final_rank": final_rank,
+                "in_final_top5": in_final_top5,
             }
     except Exception as e:
         print(f"[ERROR] Recommender call failed: {e}")
@@ -534,7 +565,12 @@ def api_chat():
 
     profile["turn"] = session["turn"]
     profile["seed_count"] = len(session["mentioned_films"])
-    profile["fallback_used"] = diagnostics.get("weak_seed_fallback", False)
+    kbrd_diagnostics = diagnostics.get("kbrd", {})
+    profile["fallback_used"] = (
+        bool(kbrd_diagnostics.get("qwen_fallback_executed", False))
+        if isinstance(kbrd_diagnostics, dict)
+        else False
+    )
 
     session["profile"] = profile
     if movie:

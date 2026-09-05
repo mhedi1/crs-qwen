@@ -20,8 +20,8 @@ export interface SelectedCandidate {
   title: string
   genre?: string
   decade?: string
-  kbrd_rank: number | null
-  in_top5: boolean
+  final_rank: number | null
+  in_final_top5: boolean
 }
 
 export interface Profile {

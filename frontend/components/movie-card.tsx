@@ -117,7 +117,7 @@ export function MovieCard({ movie, candidates, selectedCandidate, followUp }: Mo
               >
                 <div className="mt-2 bg-secondary border border-border rounded-lg p-[10px_12px] text-[0.75rem] font-mono">
                   <div className="text-[0.65rem] font-bold tracking-[0.06em] uppercase text-muted-foreground mb-1.5">
-                    Retrieved Candidates
+                    Final Reranked Candidates
                   </div>
                   <div className="flex flex-wrap gap-[6px] mb-1">
                     {candidates.map((c, i) => {
@@ -129,38 +129,31 @@ export function MovieCard({ movie, candidates, selectedCandidate, followUp }: Mo
                           </span>
                         )
                       }
-                      if (c.source === "KBRD_NEURAL") {
-                        return (
-                          <span key={i} className="text-[0.75rem] font-mono px-2.5 py-[3px] rounded-[20px] bg-[#2563eb14] border border-[#2563eb4d] text-[#1d4ed8] dark:text-[#60a5fa] whitespace-nowrap">
-                            {i + 1} {c.title}
-                          </span>
-                        )
-                      }
                       return (
-                        <span key={i} className="text-[0.75rem] font-mono px-2.5 py-[3px] rounded-[20px] bg-[#16a34a14] border border-[#16a34a4d] text-[#15803d] dark:text-[#4ade80] whitespace-nowrap">
+                        <span key={i} className="text-[0.75rem] font-mono px-2.5 py-[3px] rounded-[20px] bg-muted/50 border border-border text-muted-foreground whitespace-nowrap">
                           {i + 1} {c.title}
                         </span>
                       )
                     })}
                   </div>
                   <div className="text-[0.7rem] text-muted-foreground font-mono italic mt-1 mb-3">
-                    Showing top 5 of 50 retrieved candidates
+                    Showing top 5 of 50 reranked candidates
                   </div>
 
                   {selectedCandidate && (
                     <div className="flex items-baseline flex-wrap gap-1.5 border-t border-[#d9770633] pt-[10px]">
-                      <span className="text-[0.7rem] font-mono text-[var(--color-movie-gold)] whitespace-nowrap">Qwen selected:</span>
+                      <span className="text-[0.7rem] font-mono text-[var(--color-movie-gold)] whitespace-nowrap">Stage 2 selected:</span>
                       <span className="font-bold font-mono text-[var(--color-movie-gold)] text-[0.88rem]">{selectedCandidate.title}</span>
                       <span className="text-[0.78rem] font-mono text-muted-foreground">
-                        {selectedCandidate.in_top5 && selectedCandidate.kbrd_rank != null ? (
+                        {selectedCandidate.in_final_top5 && selectedCandidate.final_rank != null ? (
                           <>
-                            (ranked <strong className="text-[var(--color-movie-gold)]">#{selectedCandidate.kbrd_rank}</strong> in KBRD list){" "}
+                            (ranked <strong className="text-[var(--color-movie-gold)]">#{selectedCandidate.final_rank}</strong> in final reranked list){" "}
                             <span className="text-[0.72rem] bg-[#d9770614] border border-[#d9770633] rounded-[5px] px-1.5 py-[1px] text-[var(--color-movie-gold)]">(in top-5)</span>
                           </>
-                        ) : selectedCandidate.in_top5 ? (
+                        ) : selectedCandidate.in_final_top5 ? (
                           <span className="text-[0.72rem] bg-[#d9770614] border border-[#d9770633] rounded-[5px] px-1.5 py-[1px] text-[var(--color-movie-gold)]">(in top-5)</span>
                         ) : (
-                          <span className="text-[0.72rem] bg-[#6b728014] border border-border rounded-[5px] px-1.5 py-[1px] text-muted-foreground">(ranked outside KBRD top-5)</span>
+                          <span className="text-[0.72rem] bg-[#6b728014] border border-border rounded-[5px] px-1.5 py-[1px] text-muted-foreground">(ranked outside final reranked top-5)</span>
                         )}
                       </span>
                     </div>

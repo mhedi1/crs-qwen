@@ -193,15 +193,15 @@
               c.title && c.title.toLowerCase() === selected_candidate.title.toLowerCase();
             const chipClass = isSelected
               ? "candidate-chip chip-selected"
-              : (c.source === "KBRD_NEURAL" ? "candidate-chip chip-kbrd" : "candidate-chip chip-seed");
+              : "candidate-chip";
             const prefix = isSelected ? "[+] " : "";
             return `<span class="${chipClass}" data-tooltip="${escapeHtml(tooltip)}">${prefix}${idx + 1} ${escapeHtml(c.title || "—")}</span>`;
           }).join("");
           candidatesHtml = `
-            <div class="pipeline-header mb-2">Retrieved Candidates</div>
+            <div class="pipeline-header mb-2">Final Reranked Candidates</div>
             ${fallbackNote}
             <div class="candidate-chips">${chips}</div>
-            <div class="candidates-count-note">Showing top 5 of 50 retrieved candidates</div>
+            <div class="candidates-count-note">Showing top 5 of 50 reranked candidates</div>
           `;
         } else {
           candidatesHtml = `<p class="text-secondary small mb-0">Pipeline details not available.</p>`;
@@ -211,17 +211,17 @@
         let qwenSelectedHtml = "";
         if (selected_candidate && selected_candidate.title) {
           let rankNote = "";
-          if (selected_candidate.in_top5 && selected_candidate.kbrd_rank !== null) {
-            rankNote = `(ranked <strong>#${selected_candidate.kbrd_rank}</strong> in KBRD list)` +
+          if (selected_candidate.in_final_top5 && selected_candidate.final_rank !== null) {
+            rankNote = `(ranked <strong>#${selected_candidate.final_rank}</strong> in final reranked list)` +
                        ` <span class="in-top5-note">(in top-5)</span>`;
-          } else if (selected_candidate.in_top5) {
+          } else if (selected_candidate.in_final_top5) {
             rankNote = `<span class="in-top5-note">(in top-5)</span>`;
           } else {
-            rankNote = `<span class="not-in-top5-note">(ranked outside KBRD top-5)</span>`;
+            rankNote = `<span class="not-in-top5-note">(ranked outside final reranked top-5)</span>`;
           }
           qwenSelectedHtml = `
             <div class="qwen-selected-row mt-3">
-              <span class="qwen-selected-label">Qwen selected:</span>
+              <span class="qwen-selected-label">Stage 2 selected:</span>
               <span class="qwen-selected-title">${escapeHtml(selected_candidate.title)}</span>
               <span class="qwen-selected-rank">${rankNote}</span>
             </div>
