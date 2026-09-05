@@ -27,7 +27,11 @@ def _fallback_response(movie: dict) -> str:
                 f"I think it fits well with what you described.")
 
 
-def _parse_grounded_response(raw_response: str, selected_title: str) -> str | None:
+def _parse_grounded_response(
+    raw_response: str,
+    selected_title: str,
+    require_recommendation_opening: bool = True,
+) -> str | None:
     lines = raw_response.strip().splitlines()
     if len(lines) < 2 or not lines[0].startswith(_SELECTED_TITLE_PREFIX):
         return None
@@ -43,17 +47,23 @@ def _parse_grounded_response(raw_response: str, selected_title: str) -> str | No
     if not response:
         return None
 
-    required_opening = f"I recommend {selected_title}"
-    if not response.startswith(required_opening):
-        return None
-    if len(response) > len(required_opening):
-        boundary = response[len(required_opening)]
-        if not boundary.isspace() and boundary not in ".,!?:;—-":
+    if require_recommendation_opening:
+        required_opening = f"I recommend {selected_title}"
+        if not response.startswith(required_opening):
             return None
+        if len(response) > len(required_opening):
+            boundary = response[len(required_opening)]
+            if not boundary.isspace() and boundary not in ".,!?:;—-":
+                return None
     return response
 
 
-def generate_response(history: str, selected_movie: dict, previously_recommended: list = None) -> str:
+def generate_response(
+    history: str,
+    selected_movie: dict,
+    previously_recommended: list = None,
+    is_followup: bool = False,
+) -> str:
     if USE_FAKE_MODE:
         return _fallback_response(selected_movie)
 
@@ -65,9 +75,14 @@ def generate_response(history: str, selected_movie: dict, previously_recommended
         "You do not choose or rank movies. The upstream selected recommendation is "
         "authoritative and immutable. Discuss that exact movie and never replace it "
         "with or recommend another movie. If it is an imperfect match, acknowledge "
-        "the limitation but still discuss the selected movie. On a follow-up, answer "
-        "about the selected movie only."
+        "the limitation but still discuss the selected movie."
     )
+    if is_followup:
+        sys_content += (
+            " This is a follow-up turn. Answer the user's MOST RECENT follow-up "
+            "question directly about the selected movie. You may use pronouns "
+            "naturally, but must not substitute or recommend another movie."
+        )
     other_previously_recommended = [
         str(title)
         for title in (previously_recommended or [])
@@ -80,6 +95,29 @@ def generate_response(history: str, selected_movie: dict, previously_recommended
             f"recommendations: {other_previously_recommended}"
         )
 
+    if is_followup:
+        response_instruction = (
+            "Answer the user's MOST RECENT follow-up question directly about the "
+            "selected recommendation. You may use pronouns naturally.\n"
+        )
+        reply_requirements = (
+            "- answer the most recent follow-up question directly\n"
+            "- discuss the selected movie only\n"
+            "- do not recommend or substitute another movie\n"
+            "- sound concise and friendly\n"
+        )
+    else:
+        response_instruction = (
+            "Write one conversational response using the selected recommendation.\n"
+            f"The RESPONSE field must begin exactly with: I recommend {selected_title}\n"
+        )
+        reply_requirements = (
+            "- mention the movie naturally\n"
+            "- justify it with the user's preferences\n"
+            "- sound concise and friendly\n"
+            "- avoid mentioning unselected candidates\n"
+        )
+
     messages = [
         {
             "role": "system",
@@ -88,18 +126,13 @@ def generate_response(history: str, selected_movie: dict, previously_recommended
         {
             "role": "user", 
             "content": (
-                "Write one conversational response using "
-                "the selected recommendation.\n"
-                "Return exactly this structured format:\n"
+                response_instruction
+                + "Return exactly this structured format:\n"
                 "SELECTED_TITLE: <copy the exact selected title>\n"
                 "RESPONSE: <natural-language response>\n"
                 "Do not add text before SELECTED_TITLE.\n"
-                f"The RESPONSE field must begin exactly with: I recommend {selected_title}\n"
                 "The reply must:\n"
-                "- mention the movie naturally\n"
-                "- justify it with the user's preferences\n"
-                "- sound concise and friendly\n"
-                "- avoid mentioning unselected candidates\n\n"
+                f"{reply_requirements}\n"
                 f"[Dialogue History]\n{history}\n\n"
                 f"[Selected Recommendation]\n"
                 f"{selected_movie.get('title', '')}"
@@ -114,7 +147,11 @@ def generate_response(history: str, selected_movie: dict, previously_recommended
         if not response or not response.strip():
             logger.warning("[Response Generator] Empty output from Qwen.")
             return _fallback_response(selected_movie)
-        grounded_response = _parse_grounded_response(response, selected_title)
+        grounded_response = _parse_grounded_response(
+            response,
+            selected_title,
+            require_recommendation_opening=not is_followup,
+        )
         if grounded_response is None:
             logger.warning(
                 "[Response Generator] Malformed or ungrounded output from Qwen."

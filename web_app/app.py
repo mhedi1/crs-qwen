@@ -263,6 +263,7 @@ def get_recommender():
                 dialogue_str,
                 selected_movie,
                 previously_recommended=previously_recommended,
+                is_followup=False,
             )
 
             return {
@@ -375,7 +376,12 @@ def _generate_followup_response(dialogue_history: list, last_movie: dict, previo
         for turn in dialogue_history:
             role = "User" if turn["role"] == "user" else "System"
             turns.append(f"{role}: {turn['content']}")
-        return generate_response("\n".join(turns), last_movie, previously_recommended)
+        return generate_response(
+            "\n".join(turns),
+            last_movie,
+            previously_recommended=previously_recommended,
+            is_followup=True,
+        )
     except Exception as e:
         print(f"[FOLLOW_UP] Response generation failed: {e}")
         title = last_movie.get("title", "the movie I recommended")
