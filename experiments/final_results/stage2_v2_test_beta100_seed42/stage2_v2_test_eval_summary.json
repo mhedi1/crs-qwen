@@ -1,0 +1,175 @@
+{
+  "accounting": {
+    "gold_absent": 2187,
+    "no_seed": 347,
+    "reachable": 1364,
+    "retrieval_completed": 3551,
+    "total_events": 3898
+  },
+  "comparable_full_test": true,
+  "evaluation_configuration": {
+    "artifact_order_policy": "retrieval_dataset_order_then_no_seed_audit_order_v1",
+    "checkpoint": {
+      "optimizer_step": 1254,
+      "scientific_fingerprint": "2d987c1a5b83db04b32c1f06e5d05e9253917b0536f4cb9be396cb3376cd5109",
+      "sha256": "ed4a90bd4b9d4c7fcca6f41ef6ee54038a2f548b3a2217ac97697b438ca994a4"
+    },
+    "dataset_sha256": "ddb81b08accd4df6860bf18a8178727dc74604624a95782c2c23930ef68fa6f5",
+    "denominator_policy": {
+      "full_test": 3898,
+      "gold_absent_test": 2187,
+      "no_seed_test": 347,
+      "policy": "all_test_events_misses_for_absent_or_no_seed",
+      "reachable_positive_test": 1364,
+      "retrieval_completed_test": 3551
+    },
+    "evaluation_scope": {
+      "partial_test_evaluation_allowed": false,
+      "status": "full_test"
+    },
+    "evaluation_version": "stage2_v2_final_test_evaluator_v1",
+    "metric_policy": {
+      "mrr": "mean_reciprocal_best_observed_positive_rank_misses_zero",
+      "recall": "count_best_observed_positive_rank_le_k_divided_by_full_test_denominator",
+      "version": "full_denominator_best_observed_positive_rank_v1"
+    },
+    "model": {
+      "model_id": "Qwen/Qwen2.5-3B-Instruct",
+      "requested_revision": "aa8e72537993ba99e69dfaafa59ed015b17504d1"
+    },
+    "model_selection": {
+      "selected_beta": 1.0,
+      "selection_metric": "full_dev_mrr",
+      "selection_split": "TRAIN-derived DEV",
+      "test_used_for_selection": false
+    },
+    "ranking_policy": {
+      "candidate_membership": "frozen_rrf_top50_unchanged",
+      "combination": "float64_log_rrf_plus_mean_centered_residual_v2",
+      "positive_rank": "minimum_rank_over_observed_positive_serialization_positions",
+      "tie_breaking": "score_desc_rrf_rank_entity_id_v1"
+    },
+    "source_audit_sha256": "c420bef4e2bd6ba03b1dadcfea1279c60708258ce1e0416857fe793cb366cdd0",
+    "source_manifest_sha256": "8c654e03728038733dcbd04b8972a58ab1f261b3364ac56c2a89cb6d27bcd7c7",
+    "source_summary_sha256": "1bca3053b8d1320f0e3a56b57d56ae252481f798f47309cb0b94232ebe43bcc6",
+    "upstream_fingerprints": {
+      "phase2_architecture": "2d833955d53e2903a5cc48f1c6a71cb550283d99b9c0edb6f94520254120b3db",
+      "phase3a": "f1b72fb7318880c04e9e810afd6c3dbbe343e808422ecd0c125e534191047f0a",
+      "phase3b": "ee755d8860b48992b5eac5067c2d463964f7b3e5b21d2766db807b72a8148d36"
+    }
+  },
+  "evaluation_fingerprint": "d2fcbad11a343a2784a8fdb881a4f465bc2448537d269670ebaaa6a77ce4f652",
+  "metrics": {
+    "model": {
+      "evaluation_scope": {
+        "denominator": 3898,
+        "evaluated_rank_count": 1364,
+        "hits_at_1": 219,
+        "hits_at_10": 830,
+        "hits_at_50": 1364,
+        "mrr": 0.10462417079082958,
+        "mrr_percent": 10.46241707908296,
+        "recall_at_1": 0.056182657773217036,
+        "recall_at_10": 0.2129297075423294,
+        "recall_at_10_percent": 21.29297075423294,
+        "recall_at_1_percent": 5.618265777321703,
+        "recall_at_50": 0.34992303745510517,
+        "recall_at_50_percent": 34.99230374551052,
+        "reciprocal_rank_sum": 407.8250177426537
+      },
+      "reachable_positive": {
+        "denominator": 1364,
+        "evaluated_rank_count": 1364,
+        "hits_at_1": 219,
+        "hits_at_10": 830,
+        "hits_at_50": 1364,
+        "mrr": 0.2989919484916816,
+        "mrr_percent": 29.89919484916816,
+        "recall_at_1": 0.16055718475073313,
+        "recall_at_10": 0.6085043988269795,
+        "recall_at_10_percent": 60.85043988269795,
+        "recall_at_1_percent": 16.055718475073313,
+        "recall_at_50": 1.0,
+        "recall_at_50_percent": 100.0,
+        "reciprocal_rank_sum": 407.8250177426537
+      },
+      "retrieval_completed": {
+        "denominator": 3551,
+        "evaluated_rank_count": 1364,
+        "hits_at_1": 219,
+        "hits_at_10": 830,
+        "hits_at_50": 1364,
+        "mrr": 0.11484793515704131,
+        "mrr_percent": 11.484793515704132,
+        "recall_at_1": 0.0616727682343002,
+        "recall_at_10": 0.2337369754998592,
+        "recall_at_10_percent": 23.37369754998592,
+        "recall_at_1_percent": 6.1672768234300195,
+        "recall_at_50": 0.3841171500985638,
+        "recall_at_50_percent": 38.41171500985638,
+        "reciprocal_rank_sum": 407.8250177426537
+      }
+    },
+    "rrf": {
+      "evaluation_scope": {
+        "denominator": 3898,
+        "evaluated_rank_count": 1364,
+        "hits_at_1": 134,
+        "hits_at_10": 664,
+        "hits_at_50": 1364,
+        "mrr": 0.07711970685790741,
+        "mrr_percent": 7.711970685790741,
+        "recall_at_1": 0.03437660338635198,
+        "recall_at_10": 0.17034376603386353,
+        "recall_at_10_percent": 17.034376603386352,
+        "recall_at_1_percent": 3.4376603386351974,
+        "recall_at_50": 0.34992303745510517,
+        "recall_at_50_percent": 34.99230374551052,
+        "reciprocal_rank_sum": 300.6126173321231
+      },
+      "reachable_positive": {
+        "denominator": 1364,
+        "evaluated_rank_count": 1364,
+        "hits_at_1": 134,
+        "hits_at_10": 664,
+        "hits_at_50": 1364,
+        "mrr": 0.22039048191504623,
+        "mrr_percent": 22.039048191504623,
+        "recall_at_1": 0.09824046920821114,
+        "recall_at_10": 0.4868035190615836,
+        "recall_at_10_percent": 48.68035190615836,
+        "recall_at_1_percent": 9.824046920821115,
+        "recall_at_50": 1.0,
+        "recall_at_50_percent": 100.0,
+        "reciprocal_rank_sum": 300.6126173321231
+      },
+      "retrieval_completed": {
+        "denominator": 3551,
+        "evaluated_rank_count": 1364,
+        "hits_at_1": 134,
+        "hits_at_10": 664,
+        "hits_at_50": 1364,
+        "mrr": 0.08465576382205663,
+        "mrr_percent": 8.465576382205663,
+        "recall_at_1": 0.03773584905660377,
+        "recall_at_10": 0.18698958039988736,
+        "recall_at_10_percent": 18.698958039988735,
+        "recall_at_1_percent": 3.7735849056603774,
+        "recall_at_50": 0.3841171500985638,
+        "recall_at_50_percent": 38.41171500985638,
+        "reciprocal_rank_sum": 300.6126173321231
+      }
+    }
+  },
+  "movement": {
+    "improved": 758,
+    "mean_model_rank_minus_rrf_rank": -3.63049853372434,
+    "mean_rrf_rank_minus_model_rank": 3.63049853372434,
+    "moved_out_of_rank_1": 61,
+    "moved_to_rank_1": 146,
+    "unchanged": 167,
+    "worsened": 439
+  },
+  "schema_version": "stage2_v2_test_eval_summary_v1",
+  "status": "full_test"
+}

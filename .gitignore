@@ -11,3 +11,31 @@ web_app/static/react/
 test_kbrd.py
 saved/
 movie-recommender-web-app.zip
+
+# Stage2 / JupyterHub local environments
+.venv_stage2_train/
+
+# Jupyter temporary files
+**/.ipynb_checkpoints/
+
+# Generated experiment artifacts.
+# Existing already-tracked experiment files remain tracked.
+experiments/*
+!experiments/final_results/
+!experiments/final_results/**
+
+# Generated web assets/cache
+web_app/static/posters/
+
+# Local extracted datasets / experiment archives
+redial_original_split/
+redial_original_split.zip
+latest_v2_results.zip
+
+# Development backup copies
+my_crs/*.before_*
+my_crs/*.pre_*
+my_crs/*.retrained
+
+# Legacy generated model paths/files
+saved*

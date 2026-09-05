@@ -1,0 +1,105 @@
+{
+  "artifacts": {
+    "instances": "stage2_v2_test_eval_instances.jsonl",
+    "manifest": "stage2_v2_test_eval_manifest.json",
+    "summary": "stage2_v2_test_eval_summary.json"
+  },
+  "checkpoint": {
+    "optimizer_step": 1254,
+    "path": "/home/jovyan/work/crs-thesis/experiments/stage2_v2_3b_beta100_seed42/checkpoints/checkpoint_step_00001254.pt",
+    "scientific_fingerprint": "2d987c1a5b83db04b32c1f06e5d05e9253917b0536f4cb9be396cb3376cd5109",
+    "sha256": "ed4a90bd4b9d4c7fcca6f41ef6ee54038a2f548b3a2217ac97697b438ca994a4"
+  },
+  "dataset": {
+    "path": "/home/jovyan/work/crs-thesis/experiments/stage2_v2_test_full/stage2_v2_test_candidates.jsonl",
+    "records": 3551,
+    "sha256": "ddb81b08accd4df6860bf18a8178727dc74604624a95782c2c23930ef68fa6f5"
+  },
+  "evaluation_configuration": {
+    "artifact_order_policy": "retrieval_dataset_order_then_no_seed_audit_order_v1",
+    "checkpoint": {
+      "optimizer_step": 1254,
+      "scientific_fingerprint": "2d987c1a5b83db04b32c1f06e5d05e9253917b0536f4cb9be396cb3376cd5109",
+      "sha256": "ed4a90bd4b9d4c7fcca6f41ef6ee54038a2f548b3a2217ac97697b438ca994a4"
+    },
+    "dataset_sha256": "ddb81b08accd4df6860bf18a8178727dc74604624a95782c2c23930ef68fa6f5",
+    "denominator_policy": {
+      "full_test": 3898,
+      "gold_absent_test": 2187,
+      "no_seed_test": 347,
+      "policy": "all_test_events_misses_for_absent_or_no_seed",
+      "reachable_positive_test": 1364,
+      "retrieval_completed_test": 3551
+    },
+    "evaluation_scope": {
+      "partial_test_evaluation_allowed": false,
+      "status": "full_test"
+    },
+    "evaluation_version": "stage2_v2_final_test_evaluator_v1",
+    "metric_policy": {
+      "mrr": "mean_reciprocal_best_observed_positive_rank_misses_zero",
+      "recall": "count_best_observed_positive_rank_le_k_divided_by_full_test_denominator",
+      "version": "full_denominator_best_observed_positive_rank_v1"
+    },
+    "model": {
+      "model_id": "Qwen/Qwen2.5-3B-Instruct",
+      "requested_revision": "aa8e72537993ba99e69dfaafa59ed015b17504d1"
+    },
+    "model_selection": {
+      "selected_beta": 1.0,
+      "selection_metric": "full_dev_mrr",
+      "selection_split": "TRAIN-derived DEV",
+      "test_used_for_selection": false
+    },
+    "ranking_policy": {
+      "candidate_membership": "frozen_rrf_top50_unchanged",
+      "combination": "float64_log_rrf_plus_mean_centered_residual_v2",
+      "positive_rank": "minimum_rank_over_observed_positive_serialization_positions",
+      "tie_breaking": "score_desc_rrf_rank_entity_id_v1"
+    },
+    "source_audit_sha256": "c420bef4e2bd6ba03b1dadcfea1279c60708258ce1e0416857fe793cb366cdd0",
+    "source_manifest_sha256": "8c654e03728038733dcbd04b8972a58ab1f261b3364ac56c2a89cb6d27bcd7c7",
+    "source_summary_sha256": "1bca3053b8d1320f0e3a56b57d56ae252481f798f47309cb0b94232ebe43bcc6",
+    "upstream_fingerprints": {
+      "phase2_architecture": "2d833955d53e2903a5cc48f1c6a71cb550283d99b9c0edb6f94520254120b3db",
+      "phase3a": "f1b72fb7318880c04e9e810afd6c3dbbe343e808422ecd0c125e534191047f0a",
+      "phase3b": "ee755d8860b48992b5eac5067c2d463964f7b3e5b21d2766db807b72a8148d36"
+    }
+  },
+  "evaluation_fingerprint": "d2fcbad11a343a2784a8fdb881a4f465bc2448537d269670ebaaa6a77ce4f652",
+  "model_identity": {
+    "model_class": "transformers.models.qwen2.modeling_qwen2.Qwen2Model",
+    "model_type": "qwen2",
+    "requested_model_id": "Qwen/Qwen2.5-3B-Instruct",
+    "requested_revision": "aa8e72537993ba99e69dfaafa59ed015b17504d1",
+    "resolved_commit": "aa8e72537993ba99e69dfaafa59ed015b17504d1"
+  },
+  "runtime_provenance": {
+    "cuda_version": "12.4",
+    "cuda_visible_devices": "1",
+    "device": "cuda:0",
+    "gpu_name": "NVIDIA RTX 4500 Ada Generation",
+    "gpu_total_memory_bytes": 25257836544,
+    "resolved_tokenizer_commit": null,
+    "runtime_peft_version": "0.20.0",
+    "runtime_torch_version": "2.6.0+cu124",
+    "runtime_transformers_version": "5.14.1",
+    "tokenizer_class": "transformers.models.qwen2.tokenization_qwen2.Qwen2Tokenizer",
+    "tokenizer_is_fast": true,
+    "visible_cuda_device_count": 1
+  },
+  "schema_version": "stage2_v2_test_eval_manifest_v1",
+  "source_audit": {
+    "no_seed_test": 347,
+    "path": "/home/jovyan/work/crs-thesis/experiments/stage2_v2_test_full/stage2_v2_test_audit.jsonl",
+    "sha256": "c420bef4e2bd6ba03b1dadcfea1279c60708258ce1e0416857fe793cb366cdd0"
+  },
+  "source_manifest": {
+    "path": "/home/jovyan/work/crs-thesis/experiments/stage2_v2_test_full/stage2_v2_test_manifest.json",
+    "sha256": "8c654e03728038733dcbd04b8972a58ab1f261b3364ac56c2a89cb6d27bcd7c7"
+  },
+  "source_summary": {
+    "path": "/home/jovyan/work/crs-thesis/experiments/stage2_v2_test_full/stage2_v2_test_summary.json",
+    "sha256": "1bca3053b8d1320f0e3a56b57d56ae252481f798f47309cb0b94232ebe43bcc6"
+  }
+}
